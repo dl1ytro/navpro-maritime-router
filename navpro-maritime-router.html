@@ -270,6 +270,44 @@
             return lon;
         };
 
+        // Utility: Find shortest longitude delta in degrees (-180, 180]
+        const shortestDeltaLon = (lon1, lon2) => normalizeLon(lon2 - lon1);
+
+        // Utility: Clamp latitude away from Mercator singularities
+        const clampLat = (lat) => Math.max(-89.999999, Math.min(89.999999, lat));
+
+        // Split polyline at antimeridian crossings to avoid duplicated wrap paths
+        function splitPolylineAtAntimeridian(points) {
+            if (!points.length) return [];
+
+            const segments = [];
+            let currentSegment = [[points[0][0], normalizeLon(points[0][1])]];
+
+            for (let i = 1; i < points.length; i++) {
+                const [lat1, lon1Raw] = points[i - 1];
+                const [lat2, lon2Raw] = points[i];
+                const lon1 = normalizeLon(lon1Raw);
+                const lon2 = normalizeLon(lon2Raw);
+                const lonDelta = lon2 - lon1;
+
+                if (Math.abs(lonDelta) > 180) {
+                    const targetLonFromStart = lonDelta > 0 ? 180 : -180;
+                    const crossingLonForNext = lonDelta > 0 ? -180 : 180;
+                    const t = (targetLonFromStart - lon1) / lonDelta;
+                    const crossingLat = lat1 + (lat2 - lat1) * t;
+
+                    currentSegment.push([crossingLat, targetLonFromStart]);
+                    segments.push(currentSegment);
+                    currentSegment = [[crossingLat, crossingLonForNext], [lat2, lon2]];
+                } else {
+                    currentSegment.push([lat2, lon2]);
+                }
+            }
+
+            segments.push(currentSegment);
+            return segments;
+        }
+
         /**
          * Parse maritime coordinate format: "DD-MM.MM H DDD-MM.MM H"
          * Example: "48-12.22 N 052-28.24 W"
@@ -344,7 +382,7 @@
                 const φ1 = toRad(lat1);
                 const φ2 = toRad(lat2);
                 const Δφ = toRad(lat2 - lat1);
-                const Δλ = toRad(lon2 - lon1);
+                const Δλ = toRad(shortestDeltaLon(lon1, lon2));
                 
                 const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
                           Math.cos(φ1) * Math.cos(φ2) *
@@ -358,7 +396,7 @@
             static initialBearing(lat1, lon1, lat2, lon2) {
                 const φ1 = toRad(lat1);
                 const φ2 = toRad(lat2);
-                const Δλ = toRad(lon2 - lon1);
+                const Δλ = toRad(shortestDeltaLon(lon1, lon2));
                 
                 const y = Math.sin(Δλ) * Math.cos(φ2);
                 const x = Math.cos(φ1) * Math.sin(φ2) -
@@ -373,7 +411,7 @@
                 const φ1 = toRad(lat1);
                 const φ2 = toRad(lat2);
                 const λ1 = toRad(lon1);
-                const λ2 = toRad(lon2);
+                const λ2 = λ1 + toRad(shortestDeltaLon(lon1, lon2));
                 
                 // Calculate angular distance between points
                 const d = 2 * Math.asin(Math.sqrt(
@@ -475,7 +513,7 @@
         class RhumbLine {
             // Calculate Meridional Parts for Mercator projection
             static meridionalParts(lat) {
-                const φ = toRad(lat);
+                const φ = toRad(clampLat(lat));
                 // Standard meridional parts formula (spherical approximation)
                 return 7915.704468 * Math.log10(Math.tan(Math.PI/4 + φ/2));
             }
@@ -484,26 +522,14 @@
             static distance(lat1, lon1, lat2, lon2) {
                 const φ1 = toRad(lat1);
                 const φ2 = toRad(lat2);
-                const Δφ = lat2 - lat1;
-                const Δλ = lon2 - lon1;
-                
-                // If sailing along a meridian (north-south)
-                if (Math.abs(Δλ) < 0.000001) {
-                    return R_NM * Math.abs(toRad(Δφ));
-                }
-                
-                // Calculate course angle using Mercator sailing
-                const mp1 = this.meridionalParts(lat1);
-                const mp2 = this.meridionalParts(lat2);
-                const DMP = mp2 - mp1;
-                
-                // Course from north
-                const courseRad = Math.atan2(toRad(Δλ), DMP / 60 * Math.PI / 180);
-                
-                // Distance = difference in latitude / cos(course)
-                const dist = R_NM * Math.abs(toRad(Δφ)) / Math.abs(Math.cos(courseRad));
-                
-                return dist;
+                const Δφ = φ2 - φ1;
+                const Δλ = toRad(shortestDeltaLon(lon1, lon2));
+                const ψ1 = Math.log(Math.tan(Math.PI / 4 + toRad(clampLat(lat1)) / 2));
+                const ψ2 = Math.log(Math.tan(Math.PI / 4 + toRad(clampLat(lat2)) / 2));
+                const Δψ = ψ2 - ψ1;
+                const q = Math.abs(Δψ) > 1e-12 ? (Δφ / Δψ) : Math.cos(φ1);
+
+                return Math.sqrt((Δφ * Δφ) + (q * q * Δλ * Δλ)) * R_NM;
             }
 
             // Calculate constant course angle (bearing)
@@ -511,7 +537,7 @@
                 const mp1 = this.meridionalParts(lat1);
                 const mp2 = this.meridionalParts(lat2);
                 const DMP = mp2 - mp1;
-                const Δλ = lon2 - lon1;
+                const Δλ = shortestDeltaLon(lon1, lon2);
                 
                 let course = toDeg(Math.atan2(Δλ, DMP / 60));
                 
@@ -527,7 +553,7 @@
                 const mp1 = this.meridionalParts(lat1);
                 const mp2 = this.meridionalParts(lat2);
                 const DMP = mp2 - mp1;
-                const Δλ = lon2 - lon1;
+                const Δλ = shortestDeltaLon(lon1, lon2);
                 
                 for (let i = 0; i <= numPoints; i++) {
                     const f = i / numPoints;
@@ -572,7 +598,10 @@
                     center: [45, -30],
                     zoom: 3,
                     zoomControl: false,
-                    attributionControl: false
+                    attributionControl: false,
+                    worldCopyJump: false,
+                    maxBounds: [[-85, -180], [85, 180]],
+                    maxBoundsViscosity: 1.0
                 });
 
                 // Add zoom control to top-right
@@ -584,7 +613,8 @@
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                     subdomains: 'abcd',
-                    maxZoom: 19
+                    maxZoom: 19,
+                    noWrap: true
                 }).addTo(this.map);
 
                 // Initialize markers
@@ -643,7 +673,9 @@
 
             onMarkerDrag(marker, event) {
                 const pos = event.target.getLatLng();
-                const coordStr = toMaritimeFormat(pos.lat, pos.lng);
+                const normalizedLon = normalizeLon(pos.lng);
+                event.target.setLatLng([pos.lat, normalizedLon]);
+                const coordStr = toMaritimeFormat(pos.lat, normalizedLon);
                 document.getElementById(`coord${marker}`).value = coordStr;
                 this.updateRoutes();
             }
@@ -660,9 +692,22 @@
                 
                 const target = distA < distB ? 'A' : 'B';
                 
-                document.getElementById(`coord${target}`).value = toMaritimeFormat(pos.lat, pos.lng);
-                this.markers[target].setLatLng([pos.lat, pos.lng]);
+                const normalizedLon = normalizeLon(pos.lng);
+                document.getElementById(`coord${target}`).value = toMaritimeFormat(pos.lat, normalizedLon);
+                this.markers[target].setLatLng([pos.lat, normalizedLon]);
                 this.updateRoutes();
+            }
+
+            addPolylineSegments(points, style) {
+                const layerGroup = L.layerGroup();
+                const segments = splitPolylineAtAntimeridian(points);
+
+                segments.forEach(segment => {
+                    L.polyline(segment, style).addTo(layerGroup);
+                });
+
+                layerGroup.addTo(this.map);
+                return layerGroup;
             }
 
             clearRoutes() {
@@ -722,20 +767,20 @@
                     
                     // Draw Great Circle curve (smooth arc)
                     const gcPoints = GreatCircle.generateCurvePoints(latA, lonA, latB, lonB, 200);
-                    this.layers.gcCurve = L.polyline(gcPoints, {
+                    this.layers.gcCurve = this.addPolylineSegments(gcPoints, {
                         color: '#f43f5e',
                         weight: 3,
                         opacity: 0.8,
                         dashArray: '10, 10'
-                    }).addTo(this.map);
+                    });
                     
                     // Draw Rhumb Line
                     const rhumbPoints = RhumbLine.generatePoints(latA, lonA, latB, lonB, 100);
-                    this.layers.rhumbLine = L.polyline(rhumbPoints, {
+                    this.layers.rhumbLine = this.addPolylineSegments(rhumbPoints, {
                         color: '#34d399',
                         weight: 3,
                         opacity: 0.8
-                    }).addTo(this.map);
+                    });
                     
                     // Generate and draw Great Circle segments
                     const segmentLength = parseFloat(document.getElementById('segmentInput').value) || 250;
@@ -770,15 +815,15 @@
                     const wp1 = waypoints[i];
                     const wp2 = waypoints[i + 1];
                     
-                    // Create segment line
-                    const line = L.polyline([
+                    // Create segment line (split at antimeridian if needed)
+                    const line = this.addPolylineSegments([
                         [wp1.lat, wp1.lon],
                         [wp2.lat, wp2.lon]
                     ], {
                         color: '#fbbf24',
                         weight: 2,
                         opacity: 0.9
-                    }).addTo(this.map);
+                    });
                     
                     this.layers.gcSegments.push(line);
                     
@@ -822,7 +867,7 @@
             }
 
             updateMarkerPosition(marker, lat, lon) {
-                this.markers[marker].setLatLng([lat, lon]);
+                this.markers[marker].setLatLng([lat, normalizeLon(lon)]);
             }
         }
 
@@ -863,6 +908,21 @@
             });
         }
 
+        // Quick sanity check: rhumb should usually be >= great-circle
+        function runDistanceSanityCheck() {
+            const london = { lat: 51.5074, lon: -0.1278 };
+            const newYork = { lat: 40.7128, lon: -74.0060 };
+            const gc = GreatCircle.distance(london.lat, london.lon, newYork.lat, newYork.lon);
+            const rhumb = RhumbLine.distance(london.lat, london.lon, newYork.lat, newYork.lon);
+
+            console.info('[Distance sanity] London→New York', {
+                greatCircleNM: gc.toFixed(2),
+                rhumbNM: rhumb.toFixed(2),
+                rhumbMinusGreatCircleNM: (rhumb - gc).toFixed(2),
+                isExpectedOrdering: rhumb >= gc
+            });
+        }
+
         // Initialize application
         document.addEventListener('DOMContentLoaded', () => {
             mapController = new MapController();
@@ -871,6 +931,7 @@
             setupInputListeners();
             
             // Initial calculation
+            runDistanceSanityCheck();
             setTimeout(() => {
                 mapController.updateRoutes();
             }, 500);
