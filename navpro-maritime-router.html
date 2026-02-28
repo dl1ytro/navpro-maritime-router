@@ -90,8 +90,10 @@
         <div class="flex flex-1 overflow-hidden">
             
             <!-- Sidebar -->
-            <aside class="w-[450px] glass-panel border-r border-slate-700/50 flex flex-col overflow-y-auto z-10">
+            <aside class="w-[450px] glass-panel border-r border-slate-700/50 flex flex-col overflow-hidden z-10">
                 
+                <!-- Scrollable Controls -->
+                <div class="flex-1 overflow-y-auto min-h-0">
                 <!-- Coordinate Input -->
                 <div class="p-6 border-b border-slate-700/50">
                     <h2 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
@@ -210,7 +212,7 @@
                 </div>
 
                 <!-- Waypoint Table -->
-                <div class="flex-1 p-6 min-h-0 flex flex-col">
+                <div class="p-6 min-h-[260px] flex flex-col">
                     <h2 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -232,6 +234,7 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
                 </div>
             </aside>
 
