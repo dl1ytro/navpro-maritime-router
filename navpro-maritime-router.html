@@ -290,26 +290,34 @@
 
             const segments = [];
             let currentSegment = [[points[0][0], normalizeLon(points[0][1])]];
+            let unwrappedLon = points[0][1];
 
             for (let i = 1; i < points.length; i++) {
-                const [lat1, lon1Raw] = points[i - 1];
+                const [lat1] = points[i - 1];
                 const [lat2, lon2Raw] = points[i];
-                const lon1 = normalizeLon(lon1Raw);
-                const lon2 = normalizeLon(lon2Raw);
-                const lonDelta = lon2 - lon1;
+                const delta = shortestDeltaLon(unwrappedLon, lon2Raw);
+                const nextUnwrappedLon = unwrappedLon + delta;
 
-                if (Math.abs(lonDelta) > 180) {
-                    const targetLonFromStart = lonDelta > 0 ? 180 : -180;
-                    const crossingLonForNext = lonDelta > 0 ? -180 : 180;
-                    const t = (targetLonFromStart - lon1) / lonDelta;
+                const wrappedNextLon = normalizeLon(nextUnwrappedLon);
+
+                if ((unwrappedLon < -180 && nextUnwrappedLon >= -180) ||
+                    (unwrappedLon > 180 && nextUnwrappedLon <= 180) ||
+                    (unwrappedLon <= 180 && nextUnwrappedLon > 180) ||
+                    (unwrappedLon >= -180 && nextUnwrappedLon < -180)) {
+                    const crossingBoundary = delta > 0 ? 180 : -180;
+                    const t = (crossingBoundary - unwrappedLon) / delta;
                     const crossingLat = lat1 + (lat2 - lat1) * t;
 
-                    currentSegment.push([crossingLat, targetLonFromStart]);
+                    currentSegment.push([crossingLat, crossingBoundary]);
                     segments.push(currentSegment);
-                    currentSegment = [[crossingLat, crossingLonForNext], [lat2, lon2]];
+
+                    const wrappedBoundary = delta > 0 ? -180 : 180;
+                    currentSegment = [[crossingLat, wrappedBoundary], [lat2, wrappedNextLon]];
                 } else {
-                    currentSegment.push([lat2, lon2]);
+                    currentSegment.push([lat2, wrappedNextLon]);
                 }
+
+                unwrappedLon = nextUnwrappedLon;
             }
 
             segments.push(currentSegment);
@@ -831,10 +839,12 @@
                     // Update waypoint table
                     updateWaypointTable(waypoints);
                     
-                    // Fit bounds with padding
+                    // Fit bounds around the shortest longitudinal span so Pacific crossings
+                    // don't get framed via the opposite world copy.
+                    const lonBForBounds = lonA + shortestDeltaLon(lonA, lonB);
                     const bounds = L.latLngBounds([
                         [latA, lonA],
-                        [latB, lonB]
+                        [latB, lonBForBounds]
                     ]);
                     this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
                     
