@@ -379,6 +379,20 @@
             return `${latDeg.toString().padStart(2, '0')}-${latMin.padStart(5, '0')} ${latHem} ${lonDeg.toString().padStart(3, '0')}-${lonMin.padStart(5, '0')} ${lonHem}`;
         }
 
+        function formatLatitude(lat) {
+            const latDeg = Math.floor(Math.abs(lat));
+            const latMin = ((Math.abs(lat) - latDeg) * 60).toFixed(2);
+            const latHem = lat >= 0 ? 'N' : 'S';
+            return `${latDeg.toString().padStart(2, '0')}-${latMin.padStart(5, '0')} ${latHem}`;
+        }
+
+        function formatLongitude(lon) {
+            const lonDeg = Math.floor(Math.abs(lon));
+            const lonMin = ((Math.abs(lon) - lonDeg) * 60).toFixed(2);
+            const lonHem = lon >= 0 ? 'E' : 'W';
+            return `${lonDeg.toString().padStart(3, '0')}-${lonMin.padStart(5, '0')} ${lonHem}`;
+        }
+
         /**
          * GREAT CIRCLE CALCULATIONS (Orthodrome)
          * Uses Haversine formula for distance and spherical trigonometry for waypoints
@@ -858,8 +872,8 @@
                         marker.bindPopup(`
                             <div style="color: #1e293b;">
                                 <strong>Waypoint ${i}</strong><br>
-                                Lat: ${toMaritimeFormat(wp1.lat, 0).split(' ')[0]}<br>
-                                Lon: ${toMaritimeFormat(0, wp1.lon).split(' ')[1]}<br>
+                                Lat: ${formatLatitude(wp1.lat)}<br>
+                                Lon: ${formatLongitude(wp1.lon)}<br>
                                 Dist from prev: ${wp1.dist.toFixed(1)} NM
                             </div>
                         `);
@@ -878,8 +892,8 @@
                     marker.bindPopup(`
                         <div style="color: #1e293b;">
                             <strong>Destination</strong><br>
-                            Lat: ${toMaritimeFormat(lastWp.lat, 0).split(' ')[0]}<br>
-                            Lon: ${toMaritimeFormat(0, lastWp.lon).split(' ')[1]}<br>
+                            Lat: ${formatLatitude(lastWp.lat)}<br>
+                            Lon: ${formatLongitude(lastWp.lon)}<br>
                             Dist from prev: ${lastWp.dist.toFixed(1)} NM
                         </div>
                     `);
@@ -914,8 +928,8 @@
                 const row = document.createElement('tr');
                 row.className = index % 2 === 0 ? 'bg-slate-800/20' : 'bg-transparent';
                 
-                const latStr = toMaritimeFormat(wp.lat, 0).split(' ')[0];
-                const lonStr = toMaritimeFormat(0, wp.lon).split(' ')[1];
+                const latStr = formatLatitude(wp.lat);
+                const lonStr = formatLongitude(wp.lon);
                 
                 row.innerHTML = `
                     <td class="px-3 py-2 font-mono text-amber-400 font-semibold">${wp.num}</td>
