@@ -292,44 +292,23 @@
         // Utility: Clamp latitude away from Mercator singularities
         const clampLat = (lat) => Math.max(-89.999999, Math.min(89.999999, lat));
 
-        // Split polyline at antimeridian crossings to avoid duplicated wrap paths
-        function splitPolylineAtAntimeridian(points) {
+        // Unwrap polyline longitudes to a single continuous world copy for rendering.
+        // This avoids split-at-antimeridian visual artifacts in the active viewport.
+        function unwrapPolylineLongitudes(points) {
             if (!points.length) return [];
 
-            const segments = [];
-            let currentSegment = [[points[0][0], normalizeLon(points[0][1])]];
-            let unwrappedLon = normalizeLon(points[0][1]);
+            const unwrapped = [[points[0][0], normalizeLon(points[0][1])]];
+            let previousLon = unwrapped[0][1];
 
             for (let i = 1; i < points.length; i++) {
-                const [lat1] = points[i - 1];
-                const [lat2, lon2Raw] = points[i];
-                const normalizedLon2 = normalizeLon(lon2Raw);
-                const delta = shortestDeltaLon(unwrappedLon, lon2Raw);
-                const nextUnwrappedLon = unwrappedLon + delta;
-
-                if (Math.abs(nextUnwrappedLon - unwrappedLon) > 1e-12 &&
-                    ((unwrappedLon < -180 && nextUnwrappedLon >= -180) ||
-                     (unwrappedLon > 180 && nextUnwrappedLon <= 180) ||
-                     (unwrappedLon <= 180 && nextUnwrappedLon > 180) ||
-                     (unwrappedLon >= -180 && nextUnwrappedLon < -180))) {
-                    const crossingBoundary = nextUnwrappedLon > unwrappedLon ? 180 : -180;
-                    const t = (crossingBoundary - unwrappedLon) / (nextUnwrappedLon - unwrappedLon);
-                    const crossingLat = lat1 + (lat2 - lat1) * t;
-
-                    currentSegment.push([crossingLat, crossingBoundary]);
-                    segments.push(currentSegment);
-
-                    const wrappedBoundary = crossingBoundary === 180 ? -180 : 180;
-                    currentSegment = [[crossingLat, wrappedBoundary], [lat2, normalizeLon(nextUnwrappedLon)]];
-                } else {
-                    currentSegment.push([lat2, normalizedLon2]);
-                }
-
-                unwrappedLon = nextUnwrappedLon;
+                const [lat, rawLon] = points[i];
+                const delta = shortestDeltaLon(previousLon, rawLon);
+                const nextLon = previousLon + delta;
+                unwrapped.push([lat, nextLon]);
+                previousLon = nextLon;
             }
 
-            segments.push(currentSegment);
-            return segments;
+            return unwrapped;
         }
 
         /**
@@ -653,8 +632,8 @@
                 const rhumbPoints = RhumbLine.generatePoints(lat1, lon1, lat2, lon2, 200);
                 const waypoints = GreatCircle.generateWaypoints(lat1, lon1, lat2, lon2, 250);
 
-                const gcSegments = splitPolylineAtAntimeridian(gcPoints);
-                const rhumbSegments = splitPolylineAtAntimeridian(rhumbPoints);
+                const gcSegments = [unwrapPolylineLongitudes(gcPoints)];
+                const rhumbSegments = [unwrapPolylineLongitudes(rhumbPoints)];
                 const maxGcJump = Math.max(...gcSegments.map(maxSegmentLongitudeJump), 0);
                 const maxRhumbJump = Math.max(...rhumbSegments.map(maxSegmentLongitudeJump), 0);
 
@@ -820,10 +799,10 @@
 
             addPolylineSegments(points, style) {
                 const layerGroup = L.layerGroup();
-                const segments = splitPolylineAtAntimeridian(points);
+                const segments = [unwrapPolylineLongitudes(points)];
 
                 segments.forEach(segment => {
-                    L.polyline(segment, style).addTo(layerGroup);
+                    L.polyline(segment, { ...style, noClip: true }).addTo(layerGroup);
                 });
 
                 layerGroup.addTo(this.map);
