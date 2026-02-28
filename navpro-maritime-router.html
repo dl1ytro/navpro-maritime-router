@@ -311,6 +311,64 @@
             return unwrapped;
         }
 
+        // Split a polyline when it crosses the International Date Line so Leaflet
+        // can render each side as a short segment instead of a long zigzag.
+        function splitPolylineAtDateLine(points) {
+            if (!points.length) return [];
+
+            if (points.length === 1) {
+                return [[[points[0][0], normalizeLon(points[0][1])]]];
+            }
+
+            const unwrapped = unwrapPolylineLongitudes(points);
+            const segments = [];
+            let currentSegment = [[unwrapped[0][0], normalizeLon(unwrapped[0][1])]];
+
+            const getCrossingBoundary = (lon1, lon2) => {
+                if (lon1 === lon2) return null;
+
+                const minLon = Math.min(lon1, lon2);
+                const maxLon = Math.max(lon1, lon2);
+                const kStart = Math.ceil((minLon - 180) / 360);
+                const kEnd = Math.floor((maxLon - 180) / 360);
+
+                for (let k = kStart; k <= kEnd; k++) {
+                    const boundary = 180 + (360 * k);
+                    if (boundary > minLon && boundary < maxLon) {
+                        return boundary;
+                    }
+                }
+
+                return null;
+            };
+
+            for (let i = 1; i < unwrapped.length; i++) {
+                const [lat1, lon1] = unwrapped[i - 1];
+                const [lat2, lon2] = unwrapped[i];
+                const boundary = getCrossingBoundary(lon1, lon2);
+
+                if (boundary === null) {
+                    currentSegment.push([lat2, normalizeLon(lon2)]);
+                    continue;
+                }
+
+                const t = (boundary - lon1) / (lon2 - lon1);
+                const crossingLat = lat1 + ((lat2 - lat1) * t);
+                const direction = Math.sign(lon2 - lon1) || 1;
+
+                currentSegment.push([crossingLat, normalizeLon(boundary)]);
+                segments.push(currentSegment);
+
+                currentSegment = [
+                    [crossingLat, normalizeLon(boundary - (direction * 360))],
+                    [lat2, normalizeLon(lon2 - (direction * 360))]
+                ];
+            }
+
+            segments.push(currentSegment);
+            return segments;
+        }
+
         /**
          * Parse maritime coordinate format: "DD-MM.MM H DDD-MM.MM H"
          * Example: "48-12.22 N 052-28.24 W"
@@ -632,8 +690,8 @@
                 const rhumbPoints = RhumbLine.generatePoints(lat1, lon1, lat2, lon2, 200);
                 const waypoints = GreatCircle.generateWaypoints(lat1, lon1, lat2, lon2, 250);
 
-                const gcSegments = [unwrapPolylineLongitudes(gcPoints)];
-                const rhumbSegments = [unwrapPolylineLongitudes(rhumbPoints)];
+                const gcSegments = splitPolylineAtDateLine(gcPoints);
+                const rhumbSegments = splitPolylineAtDateLine(rhumbPoints);
                 const maxGcJump = Math.max(...gcSegments.map(maxSegmentLongitudeJump), 0);
                 const maxRhumbJump = Math.max(...rhumbSegments.map(maxSegmentLongitudeJump), 0);
 
@@ -799,7 +857,7 @@
 
             addPolylineSegments(points, style) {
                 const layerGroup = L.layerGroup();
-                const segments = [unwrapPolylineLongitudes(points)];
+                const segments = splitPolylineAtDateLine(points);
 
                 segments.forEach(segment => {
                     L.polyline(segment, { ...style, noClip: true }).addTo(layerGroup);
