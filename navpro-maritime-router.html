@@ -657,6 +657,18 @@
             }
         }
 
+
+
+        // Keep waypoint longitudes in one continuous world copy for marker placement.
+        function unwrapWaypointLongitudes(waypoints) {
+            if (!waypoints.length) return [];
+            const unwrapped = unwrapPolylineLongitudes(waypoints.map((wp) => [wp.lat, wp.lon]));
+            return waypoints.map((wp, index) => ({
+                ...wp,
+                renderLon: unwrapped[index][1]
+            }));
+        }
+
         function maxSegmentLongitudeJump(points) {
             let maxJump = 0;
             for (let i = 1; i < points.length; i++) {
@@ -969,15 +981,17 @@
             }
 
             drawSegments(waypoints) {
+                const renderWaypoints = unwrapWaypointLongitudes(waypoints);
+
                 // Draw straight line segments between waypoints
-                for (let i = 0; i < waypoints.length - 1; i++) {
-                    const wp1 = waypoints[i];
-                    const wp2 = waypoints[i + 1];
+                for (let i = 0; i < renderWaypoints.length - 1; i++) {
+                    const wp1 = renderWaypoints[i];
+                    const wp2 = renderWaypoints[i + 1];
                     
                     // Create segment line (split at antimeridian if needed)
                     const line = this.addPolylineSegments([
-                        [wp1.lat, wp1.lon],
-                        [wp2.lat, wp2.lon]
+                        [wp1.lat, wp1.renderLon],
+                        [wp2.lat, wp2.renderLon]
                     ], {
                         color: '#fbbf24',
                         weight: 2,
@@ -988,7 +1002,7 @@
                     
                     // Add waypoint marker (except for start and end)
                     if (i > 0) {
-                        const marker = L.marker([wp1.lat, wp1.lon], {
+                        const marker = L.marker([wp1.lat, wp1.renderLon], {
                             icon: this.createWaypointIcon(i)
                         }).addTo(this.map);
                         
@@ -1006,10 +1020,10 @@
                 }
                 
                 // Add destination marker if there are intermediate waypoints
-                if (waypoints.length > 2) {
-                    const lastWp = waypoints[waypoints.length - 1];
-                    const marker = L.marker([lastWp.lat, lastWp.lon], {
-                        icon: this.createWaypointIcon(waypoints.length - 1)
+                if (renderWaypoints.length > 2) {
+                    const lastWp = renderWaypoints[renderWaypoints.length - 1];
+                    const marker = L.marker([lastWp.lat, lastWp.renderLon], {
+                        icon: this.createWaypointIcon(renderWaypoints.length - 1)
                     }).addTo(this.map);
                     
                     marker.bindPopup(`
