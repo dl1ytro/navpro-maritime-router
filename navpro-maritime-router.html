@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maritime Route Planner - Great Circle & Rhumb Line Navigator</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <style>
+        .waypoint-table::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .waypoint-table::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .waypoint-table::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        .waypoint-table::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 1;
+        }
+        
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+        }
+        
+        /* Coordinate input styling */
+        .coord-input {
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.5px;
+        }
+        
+        .custom-marker {
+            background: transparent !important;
+            border: none !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans antialiased overflow-hidden">
+
+    <div class="flex flex-col h-screen">
+        
+        <!-- Header -->
+        <header class="glass-panel border-b border-slate-700/50 px-6 py-4 flex items-center justify-between shrink-0 z-20">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 7m0 13V7m0 0L9.553 4.553A1 1 0 009 4.118v.006"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">NAVPRO Maritime Route Planner</h1>
+                    <p class="text-xs text-slate-400">Great Circle & Rhumb Line Navigation System</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 text-sm">
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></span>
+                    <span class="text-slate-300">Great Circle</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></span>
+                    <span class="text-slate-300">Rhumb Line</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]"></span>
+                    <span class="text-slate-300">GC Segments</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 overflow-hidden">
+            
+            <!-- Sidebar -->
+            <aside class="w-[450px] glass-panel border-r border-slate-700/50 flex flex-col overflow-y-auto z-10">
+                
+                <!-- Coordinate Input -->
+                <div class="p-6 border-b border-slate-700/50">
+                    <h2 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                        </svg>
+                        Waypoints (Maritime Format)
+                    </h2>
+                    
+                    <!-- Point A -->
+                    <div class="mb-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold text-rose-400 uppercase tracking-wider">Point A (Departure)</span>
+                            <button onclick="setCurrentLocation('A')" class="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">Use Current</button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-xs text-slate-400 mb-1">Coordinates (e.g., 48-12.22 N 52-28.24 W)</label>
+                            <input type="text" id="coordA" class="coord-input w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors uppercase" placeholder="DD-MM.M H DDD-MM.M H" value="48-12.22 N 052-28.24 W">
+                        </div>
+                        <div class="text-xs text-slate-500" id="parsedA">New York Harbor (converted to decimal)</div>
+                    </div>
+
+                    <!-- Point B -->
+                    <div class="mb-4 p-4 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Point B (Destination)</span>
+                            <button onclick="swapCoordinates()" class="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">Swap A↔B</button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-xs text-slate-400 mb-1">Coordinates (e.g., 51-30.44 N 000-07.67 W)</label>
+                            <input type="text" id="coordB" class="coord-input w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors uppercase" placeholder="DD-MM.M H DDD-MM.M H" value="51-30.44 N 000-07.67 W">
+                        </div>
+                        <div class="text-xs text-slate-500" id="parsedB">London (River Thames) (converted to decimal)</div>
+                    </div>
+
+                    <!-- Quick Presets -->
+                    <div class="flex gap-2 flex-wrap">
+                        <button onclick="loadPreset('transatlantic')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs transition-colors">NYC-London</button>
+                        <button onclick="loadPreset('pacific')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs transition-colors">Tokyo-SF</button>
+                        <button onclick="loadPreset('sydney')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs transition-colors">Sydney-LA</button>
+                        <button onclick="loadPreset('capetown')" class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-xs transition-colors">Rio-Cape Town</button>
+                    </div>
+                </div>
+
+                <!-- Segmentation Controls -->
+                <div class="p-6 border-b border-slate-700/50">
+                    <h2 class="text-sm font-semibold text-amber-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                        Great Circle Segmentation
+                    </h2>
+                    
+                    <div class="mb-4">
+                        <label class="block text-xs text-slate-400 mb-2">Segment Length (Nautical Miles)</label>
+                        <div class="flex items-center gap-3">
+                            <input type="range" id="segmentSlider" min="50" max="1000" step="50" value="250" class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
+                            <input type="number" id="segmentInput" value="250" min="1" class="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-center focus:outline-none focus:border-amber-400">
+                        </div>
+                        <div class="mt-2 text-xs text-slate-500 flex justify-between">
+                            <span>50 NM</span>
+                            <span id="segmentDisplay" class="text-amber-400 font-semibold">250 NM segments</span>
+                            <span>1000 NM</span>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center justify-between p-3 bg-slate-800/30 rounded border border-slate-700/30">
+                        <span class="text-xs text-slate-400">Total Segments:</span>
+                        <span id="totalSegments" class="text-lg font-bold text-amber-400">--</span>
+                    </div>
+                </div>
+
+                <!-- Distance Results -->
+                <div class="p-6 border-b border-slate-700/50">
+                    <h2 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        Distance Calculations
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg">
+                            <div>
+                                <div class="text-xs text-rose-400 font-semibold uppercase">Great Circle</div>
+                                <div class="text-xs text-slate-500">Shortest path (curved)</div>
+                            </div>
+                            <div class="text-right">
+                                <div id="gcDistance" class="text-xl font-bold text-rose-400">--</div>
+                                <div class="text-xs text-slate-500">nautical miles</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                            <div>
+                                <div class="text-xs text-emerald-400 font-semibold uppercase">Rhumb Line</div>
+                                <div class="text-xs text-slate-500">Constant bearing</div>
+                            </div>
+                            <div class="text-right">
+                                <div id="rhumbDistance" class="text-xl font-bold text-emerald-400">--</div>
+                                <div class="text-xs text-slate-500">nautical miles</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                            <div>
+                                <div class="text-xs text-amber-400 font-semibold uppercase">Difference</div>
+                                <div class="text-xs text-slate-500">Rhumb - GC</div>
+                            </div>
+                            <div class="text-right">
+                                <div id="distanceDiff" class="text-lg font-bold text-amber-400">--</div>
+                                <div class="text-xs text-slate-500">nautical miles</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Waypoint Table -->
+                <div class="flex-1 p-6 min-h-0 flex flex-col">
+                    <h2 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                        </svg>
+                        Waypoint Table
+                    </h2>
+                    <div class="flex-1 overflow-auto waypoint-table bg-slate-800/30 rounded-lg border border-slate-700/30">
+                        <table class="w-full text-xs">
+                            <thead class="bg-slate-700/50 text-slate-300 sticky top-0">
+                                <tr>
+                                    <th class="px-3 py-2 text-left font-semibold">WP#</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Latitude</th>
+                                    <th class="px-3 py-2 text-left font-semibold">Longitude</th>
+                                    <th class="px-3 py-2 text-right font-semibold">Dist (NM)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="waypointTableBody" class="divide-y divide-slate-700/30">
+                                <!-- Dynamic content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Map Area -->
+            <main class="flex-1 relative bg-slate-950">
+                <div id="map"></div>
+                
+                <div class="absolute bottom-6 right-6 glass-panel px-4 py-3 rounded-lg border border-slate-700/50 z-[1000] max-w-xs">
+                    <div class="text-xs text-slate-400 mb-1">Navigation Mode</div>
+                    <div class="text-sm font-semibold text-slate-200">Great Circle Segmentation</div>
+                    <div class="text-xs text-slate-500 mt-1">Enter coordinates in maritime format: DD-MM.M H</div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * NAVIGATION ENGINE
+         * Mathematical implementations for Great Circle and Rhumb Line calculations
+         */
+
+        // Earth's radius in nautical miles (WGS84)
+        const R_NM = 3440.065;
+        
+        // Utility: Convert degrees to radians
+        const toRad = (deg) => deg * Math.PI / 180;
+        
+        // Utility: Convert radians to degrees
+        const toDeg = (rad) => rad * 180 / Math.PI;
+        
+        // Utility: Normalize longitude to -180 to +180
+        const normalizeLon = (lon) => {
+            while (lon > 180) lon -= 360;
+            while (lon < -180) lon += 360;
+            return lon;
+        };
+
+        /**
+         * Parse maritime coordinate format: "DD-MM.M H DDD-MM.M H"
+         * Example: "48-12.22 N 052-28.24 W"
+         * Returns: {lat: decimal_degrees, lon: decimal_degrees}
+         */
+        function parseMaritimeCoordinate(input) {
+            // Normalize input: remove extra spaces, convert to uppercase
+            const normalized = input.toUpperCase().trim().replace(/\s+/g, ' ');
+            
+            // Regex pattern for maritime coordinates
+            // Matches: DD-MM.M H DDD-MM.M H
+            const pattern = /^(\d{1,3})-(\d{1,2}\.?\d*)\s*([NS])\s+(\d{1,3})-(\d{1,2}\.?\d*)\s*([EW])$/;
+            const match = normalized.match(pattern);
+            
+            if (!match) {
+                throw new Error('Invalid format. Use: DD-MM.M H DDD-MM.M H (e.g., 48-12.22 N 052-28.24 W)');
+            }
+            
+            // Parse latitude components
+            const latDeg = parseInt(match[1], 10);
+            const latMin = parseFloat(match[2]);
+            const latHem = match[3];
+            
+            // Parse longitude components
+            const lonDeg = parseInt(match[4], 10);
+            const lonMin = parseFloat(match[5]);
+            const lonHem = match[6];
+            
+            // Validate ranges
+            if (latDeg > 90 || latMin >= 60) throw new Error('Invalid latitude degrees or minutes');
+            if (lonDeg > 180 || lonMin >= 60) throw new Error('Invalid longitude degrees or minutes');
+            
+            // Convert to decimal degrees
+            let lat = latDeg + (latMin / 60);
+            let lon = lonDeg + (lonMin / 60);
+            
+            // Apply hemisphere
+            if (latHem === 'S') lat = -lat;
+            if (lonHem === 'W') lon = -lon;
+            
+            // Normalize longitude
+            lon = normalizeLon(lon);
+            
+            return { lat, lon };
+        }
+
+        /**
+         * Convert decimal degrees to maritime format
+         */
+        function toMaritimeFormat(lat, lon) {
+            const latDeg = Math.floor(Math.abs(lat));
+            const latMin = ((Math.abs(lat) - latDeg) * 60).toFixed(2);
+            const latHem = lat >= 0 ? 'N' : 'S';
+            
+            const lonDeg = Math.floor(Math.abs(lon));
+            const lonMin = ((Math.abs(lon) - lonDeg) * 60).toFixed(2);
+            const lonHem = lon >= 0 ? 'E' : 'W';
+            
+            return `${latDeg.toString().padStart(2, '0')}-${latMin.padStart(5, '0')} ${latHem} ${lonDeg.toString().padStart(3, '0')}-${lonMin.padStart(5, '0')} ${lonHem}`;
+        }
+
+        /**
+         * GREAT CIRCLE CALCULATIONS (Orthodrome)
+         * Uses Haversine formula for distance and spherical trigonometry for waypoints
+         */
+        class GreatCircle {
+            // Calculate distance between two points using Haversine formula
+            // Input: decimal degrees
+            static distance(lat1, lon1, lat2, lon2) {
+                const φ1 = toRad(lat1);
+                const φ2 = toRad(lat2);
+                const Δφ = toRad(lat2 - lat1);
+                const Δλ = toRad(lon2 - lon1);
+                
+                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                
+                return R_NM * c;
+            }
+
+            // Calculate initial bearing (forward azimuth)
+            static initialBearing(lat1, lon1, lat2, lon2) {
+                const φ1 = toRad(lat1);
+                const φ2 = toRad(lat2);
+                const Δλ = toRad(lon2 - lon1);
+                
+                const y = Math.sin(Δλ) * Math.cos(φ2);
+                const x = Math.cos(φ1) * Math.sin(φ2) -
+                          Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+                
+                let bearing = toDeg(Math.atan2(y, x));
+                return (bearing + 360) % 360;
+            }
+
+            // Interpolate waypoint at fraction f along Great Circle (0 to 1)
+            static interpolate(lat1, lon1, lat2, lon2, f) {
+                const φ1 = toRad(lat1);
+                const φ2 = toRad(lat2);
+                const λ1 = toRad(lon1);
+                const λ2 = toRad(lon2);
+                
+                // Calculate angular distance between points
+                const d = 2 * Math.asin(Math.sqrt(
+                    Math.pow(Math.sin((φ2 - φ1) / 2), 2) +
+                    Math.cos(φ1) * Math.cos(φ2) * Math.pow(Math.sin((λ2 - λ1) / 2), 2)
+                ));
+                
+                // Handle antipodal points
+                if (Math.abs(d) < 1e-10) {
+                    return [lat1, lon1];
+                }
+                
+                const A = Math.sin((1-f) * d) / Math.sin(d);
+                const B = Math.sin(f * d) / Math.sin(d);
+                
+                const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
+                const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
+                const z = A * Math.sin(φ1) + B * Math.sin(φ2);
+                
+                const lat = toDeg(Math.atan2(z, Math.sqrt(x*x + y*y)));
+                const lon = toDeg(Math.atan2(y, x));
+                
+                return [lat, normalizeLon(lon)];
+            }
+
+            // Generate waypoints at fixed distance intervals
+            static generateWaypoints(lat1, lon1, lat2, lon2, segmentLengthNM) {
+                const totalDistance = this.distance(lat1, lon1, lat2, lon2);
+                
+                // Handle edge case where points are identical
+                if (totalDistance < 0.001) {
+                    return [{
+                        num: 0,
+                        lat: lat1,
+                        lon: lon1,
+                        dist: 0
+                    }];
+                }
+                
+                const numSegments = Math.max(1, Math.ceil(totalDistance / segmentLengthNM));
+                const waypoints = [];
+                
+                // Add starting point
+                waypoints.push({
+                    num: 0,
+                    lat: lat1,
+                    lon: lon1,
+                    dist: 0
+                });
+                
+                // Generate intermediate waypoints
+                for (let i = 1; i < numSegments; i++) {
+                    const f = i / numSegments;
+                    const [lat, lon] = this.interpolate(lat1, lon1, lat2, lon2, f);
+                    const prev = waypoints[waypoints.length - 1];
+                    const dist = this.distance(prev.lat, prev.lon, lat, lon);
+                    
+                    waypoints.push({
+                        num: i,
+                        lat: lat,
+                        lon: lon,
+                        dist: dist
+                    });
+                }
+                
+                // Add destination
+                const lastDist = this.distance(
+                    waypoints[waypoints.length - 1].lat, 
+                    waypoints[waypoints.length - 1].lon, 
+                    lat2, lon2
+                );
+                
+                waypoints.push({
+                    num: numSegments,
+                    lat: lat2,
+                    lon: lon2,
+                    dist: lastDist
+                });
+                
+                return waypoints;
+            }
+
+            // Generate dense points for smooth curve visualization
+            static generateCurvePoints(lat1, lon1, lat2, lon2, numPoints = 100) {
+                const points = [];
+                for (let i = 0; i <= numPoints; i++) {
+                    const f = i / numPoints;
+                    const [lat, lon] = this.interpolate(lat1, lon1, lat2, lon2, f);
+                    points.push([lat, lon]);
+                }
+                return points;
+            }
+        }
+
+        /**
+         * RHUMB LINE CALCULATIONS (Loxodrome)
+         * Uses Mercator sailing formulas for constant bearing path
+         */
+        class RhumbLine {
+            // Calculate Meridional Parts for Mercator projection
+            static meridionalParts(lat) {
+                const φ = toRad(lat);
+                // Standard meridional parts formula (spherical approximation)
+                return 7915.704468 * Math.log10(Math.tan(Math.PI/4 + φ/2));
+            }
+
+            // Calculate distance using Mercator sailing formula
+            static distance(lat1, lon1, lat2, lon2) {
+                const φ1 = toRad(lat1);
+                const φ2 = toRad(lat2);
+                const Δφ = lat2 - lat1;
+                const Δλ = lon2 - lon1;
+                
+                // If sailing along a meridian (north-south)
+                if (Math.abs(Δλ) < 0.000001) {
+                    return R_NM * Math.abs(toRad(Δφ));
+                }
+                
+                // Calculate course angle using Mercator sailing
+                const mp1 = this.meridionalParts(lat1);
+                const mp2 = this.meridionalParts(lat2);
+                const DMP = mp2 - mp1;
+                
+                // Course from north
+                const courseRad = Math.atan2(toRad(Δλ), DMP / 60 * Math.PI / 180);
+                
+                // Distance = difference in latitude / cos(course)
+                const dist = R_NM * Math.abs(toRad(Δφ)) / Math.abs(Math.cos(courseRad));
+                
+                return dist;
+            }
+
+            // Calculate constant course angle (bearing)
+            static course(lat1, lon1, lat2, lon2) {
+                const mp1 = this.meridionalParts(lat1);
+                const mp2 = this.meridionalParts(lat2);
+                const DMP = mp2 - mp1;
+                const Δλ = lon2 - lon1;
+                
+                let course = toDeg(Math.atan2(Δλ, DMP / 60));
+                
+                // Normalize to 0-360
+                course = (course + 360) % 360;
+                
+                return course;
+            }
+
+            // Generate points for Rhumb Line visualization
+            static generatePoints(lat1, lon1, lat2, lon2, numPoints = 100) {
+                const points = [];
+                const mp1 = this.meridionalParts(lat1);
+                const mp2 = this.meridionalParts(lat2);
+                const DMP = mp2 - mp1;
+                const Δλ = lon2 - lon1;
+                
+                for (let i = 0; i <= numPoints; i++) {
+                    const f = i / numPoints;
+                    
+                    // Interpolate meridional parts
+                    const mp = mp1 + DMP * f;
+                    
+                    // Convert back to latitude (inverse meridional parts)
+                    const lat = toDeg(2 * Math.atan(Math.pow(10, mp / 7915.704468)) - Math.PI/2);
+                    
+                    // Interpolate longitude linearly (Mercator property)
+                    const lon = lon1 + Δλ * f;
+                    
+                    points.push([lat, normalizeLon(lon)]);
+                }
+                
+                return points;
+            }
+        }
+
+        /**
+         * MAP CONTROLLER
+         * Handles Leaflet map interactions and route visualization
+         */
+        class MapController {
+            constructor() {
+                this.map = null;
+                this.markers = {};
+                this.layers = {
+                    gcCurve: null,
+                    rhumbLine: null,
+                    gcSegments: [],
+                    waypointMarkers: []
+                };
+                this.currentPoints = null;
+                this.init();
+            }
+
+            init() {
+                // Initialize map centered on Atlantic
+                this.map = L.map('map', {
+                    center: [45, -30],
+                    zoom: 3,
+                    zoomControl: false,
+                    attributionControl: false
+                });
+
+                // Add zoom control to top-right
+                L.control.zoom({
+                    position: 'topright'
+                }).addTo(this.map);
+
+                // Add dark-themed tile layer
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 19
+                }).addTo(this.map);
+
+                // Initialize markers
+                this.markers.A = L.marker([40.7128, -74.0060], {
+                    draggable: true,
+                    icon: this.createMarkerIcon('A', 'rose')
+                }).addTo(this.map);
+                
+                this.markers.B = L.marker([51.5074, -0.1278], {
+                    draggable: true,
+                    icon: this.createMarkerIcon('B', 'emerald')
+                }).addTo(this.map);
+
+                // Bind events
+                this.markers.A.on('dragend', (e) => this.onMarkerDrag('A', e));
+                this.markers.B.on('dragend', (e) => this.onMarkerDrag('B', e));
+                
+                // Click on map to set coordinates
+                this.map.on('click', (e) => this.onMapClick(e));
+            }
+
+            createMarkerIcon(label, color) {
+                const colors = {
+                    rose: '#f43f5e',
+                    emerald: '#34d399',
+                    amber: '#fbbf24'
+                };
+                
+                return L.divIcon({
+                    className: 'custom-marker',
+                    html: `
+                        <div style="position: relative;">
+                            <div style="width: 32px; height: 32px; background: ${colors[color]}; border-radius: 50%; border: 2px solid white; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                ${label}
+                            </div>
+                            <div style="position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 8px solid ${colors[color]};"></div>
+                        </div>
+                    `,
+                    iconSize: [32, 40],
+                    iconAnchor: [16, 40]
+                });
+            }
+
+            createWaypointIcon(num) {
+                return L.divIcon({
+                    className: 'custom-marker',
+                    html: `
+                        <div style="width: 24px; height: 24px; background: #fbbf24; border-radius: 50%; border: 2px solid #0f172a; display: flex; align-items: center; justify-content: center; color: #0f172a; font-weight: bold; font-size: 11px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">
+                            ${num}
+                        </div>
+                    `,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12]
+                });
+            }
+
+            onMarkerDrag(marker, event) {
+                const pos = event.target.getLatLng();
+                const coordStr = toMaritimeFormat(pos.lat, pos.lng);
+                document.getElementById(`coord${marker}`).value = coordStr;
+                this.updateRoutes();
+            }
+
+            onMapClick(e) {
+                const pos = e.latlng;
+                
+                // Determine which point is closer
+                const posA = this.markers.A.getLatLng();
+                const posB = this.markers.B.getLatLng();
+                
+                const distA = Math.sqrt(Math.pow(posA.lat - pos.lat, 2) + Math.pow(posA.lng - pos.lng, 2));
+                const distB = Math.sqrt(Math.pow(posB.lat - pos.lat, 2) + Math.pow(posB.lng - pos.lng, 2));
+                
+                const target = distA < distB ? 'A' : 'B';
+                
+                document.getElementById(`coord${target}`).value = toMaritimeFormat(pos.lat, pos.lng);
+                this.markers[target].setLatLng([pos.lat, pos.lng]);
+                this.updateRoutes();
+            }
+
+            clearRoutes() {
+                // Remove Great Circle curve
+                if (this.layers.gcCurve) {
+                    this.map.removeLayer(this.layers.gcCurve);
+                    this.layers.gcCurve = null;
+                }
+                
+                // Remove Rhumb Line
+                if (this.layers.rhumbLine) {
+                    this.map.removeLayer(this.layers.rhumbLine);
+                    this.layers.rhumbLine = null;
+                }
+                
+                // Remove GC segments
+                this.layers.gcSegments.forEach(line => this.map.removeLayer(line));
+                this.layers.gcSegments = [];
+                
+                // Remove waypoint markers
+                this.layers.waypointMarkers.forEach(marker => this.map.removeLayer(marker));
+                this.layers.waypointMarkers = [];
+            }
+
+            updateRoutes() {
+                try {
+                    // Parse coordinates
+                    const coordA = parseMaritimeCoordinate(document.getElementById('coordA').value);
+                    const coordB = parseMaritimeCoordinate(document.getElementById('coordB').value);
+                    
+                    const { lat: latA, lon: lonA } = coordA;
+                    const { lat: latB, lon: lonB } = coordB;
+                    
+                    this.currentPoints = { latA, lonA, latB, lonB };
+                    
+                    // Update parsed display
+                    document.getElementById('parsedA').textContent = 
+                        `${latA.toFixed(4)}°, ${lonA.toFixed(4)}°`;
+                    document.getElementById('parsedB').textContent = 
+                        `${latB.toFixed(4)}°, ${lonB.toFixed(4)}°`;
+                    
+                    // Clear existing routes
+                    this.clearRoutes();
+                    
+                    // Calculate distances
+                    const gcDist = GreatCircle.distance(latA, lonA, latB, lonB);
+                    const rhumbDist = RhumbLine.distance(latA, lonA, latB, lonB);
+                    
+                    // Update distance displays
+                    document.getElementById('gcDistance').textContent = gcDist.toFixed(1);
+                    document.getElementById('rhumbDistance').textContent = rhumbDist.toFixed(1);
+                    
+                    const diff = rhumbDist - gcDist;
+                    const diffElem = document.getElementById('distanceDiff');
+                    diffElem.textContent = (diff >= 0 ? '+' : '') + diff.toFixed(1);
+                    diffElem.className = `text-lg font-bold ${diff > 0 ? 'text-amber-400' : 'text-emerald-400'}`;
+                    
+                    // Draw Great Circle curve (smooth arc)
+                    const gcPoints = GreatCircle.generateCurvePoints(latA, lonA, latB, lonB, 200);
+                    this.layers.gcCurve = L.polyline(gcPoints, {
+                        color: '#f43f5e',
+                        weight: 3,
+                        opacity: 0.8,
+                        dashArray: '10, 10'
+                    }).addTo(this.map);
+                    
+                    // Draw Rhumb Line
+                    const rhumbPoints = RhumbLine.generatePoints(latA, lonA, latB, lonB, 100);
+                    this.layers.rhumbLine = L.polyline(rhumbPoints, {
+                        color: '#34d399',
+                        weight: 3,
+                        opacity: 0.8
+                    }).addTo(this.map);
+                    
+                    // Generate and draw Great Circle segments
+                    const segmentLength = parseFloat(document.getElementById('segmentInput').value) || 250;
+                    const waypoints = GreatCircle.generateWaypoints(latA, lonA, latB, lonB, segmentLength);
+                    
+                    // Update segment count
+                    document.getElementById('totalSegments').textContent = waypoints.length - 1;
+                    
+                    // Draw segments and waypoints
+                    this.drawSegments(waypoints);
+                    
+                    // Update waypoint table
+                    updateWaypointTable(waypoints);
+                    
+                    // Fit bounds with padding
+                    const bounds = L.latLngBounds([
+                        [latA, lonA],
+                        [latB, lonB]
+                    ]);
+                    this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+                    
+                } catch (error) {
+                    console.error('Error updating routes:', error);
+                    document.getElementById('parsedA').textContent = 'Invalid format';
+                    document.getElementById('parsedB').textContent = 'Invalid format';
+                }
+            }
+
+            drawSegments(waypoints) {
+                // Draw straight line segments between waypoints
+                for (let i = 0; i < waypoints.length - 1; i++) {
+                    const wp1 = waypoints[i];
+                    const wp2 = waypoints[i + 1];
+                    
+                    // Create segment line
+                    const line = L.polyline([
+                        [wp1.lat, wp1.lon],
+                        [wp2.lat, wp2.lon]
+                    ], {
+                        color: '#fbbf24',
+                        weight: 2,
+                        opacity: 0.9
+                    }).addTo(this.map);
+                    
+                    this.layers.gcSegments.push(line);
+                    
+                    // Add waypoint marker (except for start and end)
+                    if (i > 0) {
+                        const marker = L.marker([wp1.lat, wp1.lon], {
+                            icon: this.createWaypointIcon(i)
+                        }).addTo(this.map);
+                        
+                        marker.bindPopup(`
+                            <div style="color: #1e293b;">
+                                <strong>Waypoint ${i}</strong><br>
+                                Lat: ${toMaritimeFormat(wp1.lat, 0).split(' ')[0]}<br>
+                                Lon: ${toMaritimeFormat(0, wp1.lon).split(' ')[1]}<br>
+                                Dist from prev: ${wp1.dist.toFixed(1)} NM
+                            </div>
+                        `);
+                        
+                        this.layers.waypointMarkers.push(marker);
+                    }
+                }
+                
+                // Add destination marker if there are intermediate waypoints
+                if (waypoints.length > 2) {
+                    const lastWp = waypoints[waypoints.length - 1];
+                    const marker = L.marker([lastWp.lat, lastWp.lon], {
+                        icon: this.createWaypointIcon(waypoints.length - 1)
+                    }).addTo(this.map);
+                    
+                    marker.bindPopup(`
+                        <div style="color: #1e293b;">
+                            <strong>Destination</strong><br>
+                            Lat: ${toMaritimeFormat(lastWp.lat, 0).split(' ')[0]}<br>
+                            Lon: ${toMaritimeFormat(0, lastWp.lon).split(' ')[1]}<br>
+                            Dist from prev: ${lastWp.dist.toFixed(1)} NM
+                        </div>
+                    `);
+                    
+                    this.layers.waypointMarkers.push(marker);
+                }
+            }
+
+            updateMarkerPosition(marker, lat, lon) {
+                this.markers[marker].setLatLng([lat, lon]);
+            }
+        }
+
+        // Global map controller instance
+        let mapController;
+
+        /**
+         * Update waypoint table display
+         */
+        function updateWaypointTable(waypoints) {
+            const tbody = document.getElementById('waypointTableBody');
+            tbody.innerHTML = '';
+            
+            if (!waypoints || waypoints.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = '<td colspan="4" class="px-3 py-4 text-center text-slate-500">No waypoints to display</td>';
+                tbody.appendChild(row);
+                return;
+            }
+            
+            waypoints.forEach((wp, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-slate-800/20' : 'bg-transparent';
+                
+                const latStr = toMaritimeFormat(wp.lat, 0).split(' ')[0];
+                const lonStr = toMaritimeFormat(0, wp.lon).split(' ')[1];
+                
+                row.innerHTML = `
+                    <td class="px-3 py-2 font-mono text-amber-400 font-semibold">${wp.num}</td>
+                    <td class="px-3 py-2 font-mono text-slate-300">${latStr}</td>
+                    <td class="px-3 py-2 font-mono text-slate-300">${lonStr}</td>
+                    <td class="px-3 py-2 font-mono text-right ${wp.dist > 0 ? 'text-cyan-400' : 'text-slate-500'}">
+                        ${wp.dist > 0 ? wp.dist.toFixed(1) : '--'}
+                    </td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', () => {
+            mapController = new MapController();
+            
+            // Setup input listeners
+            setupInputListeners();
+            
+            // Initial calculation
+            setTimeout(() => {
+                mapController.updateRoutes();
+            }, 500);
+        });
+
+        function setupInputListeners() {
+            // Coordinate inputs
+            ['coordA', 'coordB'].forEach(id => {
+                const input = document.getElementById(id);
+                input.addEventListener('input', debounce(() => {
+                    try {
+                        const parsed = parseMaritimeCoordinate(input.value);
+                        const marker = id === 'coordA' ? 'A' : 'B';
+                        mapController.updateMarkerPosition(marker, parsed.lat, parsed.lon);
+                        mapController.updateRoutes();
+                    } catch (e) {
+                        // Wait for valid input
+                    }
+                }, 300));
+            });
+            
+            // Segment length controls
+            const slider = document.getElementById('segmentSlider');
+            const input = document.getElementById('segmentInput');
+            const display = document.getElementById('segmentDisplay');
+            
+            slider.addEventListener('input', (e) => {
+                input.value = e.target.value;
+                display.textContent = `${e.target.value} NM segments`;
+                mapController.updateRoutes();
+            });
+            
+            input.addEventListener('input', (e) => {
+                let val = parseInt(e.target.value);
+                if (isNaN(val) || val < 1) val = 1;
+                if (val > 10000) val = 10000;
+                slider.value = Math.min(val, 1000);
+                display.textContent = `${val} NM segments`;
+                mapController.updateRoutes();
+            });
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Preset routes
+        function loadPreset(route) {
+            const presets = {
+                transatlantic: { 
+                    A: "40-42.77 N 074-00.36 W",
+                    B: "51-30.44 N 000-07.67 W",
+                    nameA: "New York Harbor",
+                    nameB: "London (River Thames)"
+                },
+                pacific: {
+                    A: "35-40.57 N 139-39.02 E",
+                    B: "37-46.49 N 122-25.16 W",
+                    nameA: "Tokyo Bay",
+                    nameB: "San Francisco"
+                },
+                sydney: {
+                    A: "33-52.13 S 151-12.56 E",
+                    B: "34-03.13 N 118-14.62 W",
+                    nameA: "Sydney Harbor",
+                    nameB: "Los Angeles"
+                },
+                capetown: {
+                    A: "22-54.41 S 043-10.37 W",
+                    B: "33-55.49 S 018-25.45 E",
+                    nameA: "Rio de Janeiro",
+                    nameB: "Cape Town"
+                }
+            };
+            
+            const preset = presets[route];
+            if (preset) {
+                document.getElementById('coordA').value = preset.A;
+                document.getElementById('coordB').value = preset.B;
+                mapController.updateRoutes();
+            }
+        }
+
+        function swapCoordinates() {
+            const coordA = document.getElementById('coordA').value;
+            const coordB = document.getElementById('coordB').value;
+            
+            document.getElementById('coordA').value = coordB;
+            document.getElementById('coordB').value = coordA;
+            
+            mapController.updateRoutes();
+        }
+
+        function setCurrentLocation(target) {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const coordStr = toMaritimeFormat(position.coords.latitude, position.coords.longitude);
+                    document.getElementById(`coord${target}`).value = coordStr;
+                    mapController.updateMarkerPosition(target, position.coords.latitude, position.coords.longitude);
+                    mapController.updateRoutes();
+                }, (error) => {
+                    alert("Unable to retrieve your location: " + error.message);
+                });
+            } else {
+                alert("Geolocation is not supported by your browser");
+            }
+        }
+    </script>
+</body>
+</html>
