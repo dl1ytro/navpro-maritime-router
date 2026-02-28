@@ -108,8 +108,8 @@
                             <button onclick="setCurrentLocation('A')" class="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">Use Current</button>
                         </div>
                         <div class="mb-3">
-                            <label class="block text-xs text-slate-400 mb-1">Coordinates (e.g., 48-12.22 N 52-28.24 W)</label>
-                            <input type="text" id="coordA" class="coord-input w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors uppercase" placeholder="DD-MM.M H DDD-MM.M H" value="48-12.22 N 052-28.24 W">
+                            <label class="block text-xs text-slate-400 mb-1">Coordinates (e.g., 48-12.22 N 052-28.24 W)</label>
+                            <input type="text" id="coordA" pattern="^\d{2}-\d{2}\.\d{2}\s[NS]\s\d{3}-\d{2}\.\d{2}\s[EW]$" title="Use maritime format exactly: DD-MM.MM N DDD-MM.MM W" class="coord-input w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors uppercase" placeholder="DD-MM.MM N DDD-MM.MM W" value="48-12.22 N 052-28.24 W" autocomplete="off" spellcheck="false">
                         </div>
                         <div class="text-xs text-slate-500" id="parsedA">New York Harbor (converted to decimal)</div>
                     </div>
@@ -122,7 +122,7 @@
                         </div>
                         <div class="mb-3">
                             <label class="block text-xs text-slate-400 mb-1">Coordinates (e.g., 51-30.44 N 000-07.67 W)</label>
-                            <input type="text" id="coordB" class="coord-input w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors uppercase" placeholder="DD-MM.M H DDD-MM.M H" value="51-30.44 N 000-07.67 W">
+                            <input type="text" id="coordB" pattern="^\d{2}-\d{2}\.\d{2}\s[NS]\s\d{3}-\d{2}\.\d{2}\s[EW]$" title="Use maritime format exactly: DD-MM.MM N DDD-MM.MM W" class="coord-input w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-cyan-500 transition-colors uppercase" placeholder="DD-MM.MM N DDD-MM.MM W" value="51-30.44 N 000-07.67 W" autocomplete="off" spellcheck="false">
                         </div>
                         <div class="text-xs text-slate-500" id="parsedB">London (River Thames) (converted to decimal)</div>
                     </div>
@@ -242,7 +242,7 @@
                 <div class="absolute bottom-6 right-6 glass-panel px-4 py-3 rounded-lg border border-slate-700/50 z-[1000] max-w-xs">
                     <div class="text-xs text-slate-400 mb-1">Navigation Mode</div>
                     <div class="text-sm font-semibold text-slate-200">Great Circle Segmentation</div>
-                    <div class="text-xs text-slate-500 mt-1">Enter coordinates in maritime format: DD-MM.M H</div>
+                    <div class="text-xs text-slate-500 mt-1">Enter coordinates in maritime format: DD-MM.MM H DDD-MM.MM H</div>
                 </div>
             </main>
         </div>
@@ -271,7 +271,7 @@
         };
 
         /**
-         * Parse maritime coordinate format: "DD-MM.M H DDD-MM.M H"
+         * Parse maritime coordinate format: "DD-MM.MM H DDD-MM.MM H"
          * Example: "48-12.22 N 052-28.24 W"
          * Returns: {lat: decimal_degrees, lon: decimal_degrees}
          */
@@ -280,12 +280,12 @@
             const normalized = input.toUpperCase().trim().replace(/\s+/g, ' ');
             
             // Regex pattern for maritime coordinates
-            // Matches: DD-MM.M H DDD-MM.M H
-            const pattern = /^(\d{1,3})-(\d{1,2}\.?\d*)\s*([NS])\s+(\d{1,3})-(\d{1,2}\.?\d*)\s*([EW])$/;
+            // Matches: DD-MM.MM H DDD-MM.MM H (strict)
+            const pattern = /^(\d{2})-(\d{2}\.\d{2})\s([NS])\s(\d{3})-(\d{2}\.\d{2})\s([EW])$/;
             const match = normalized.match(pattern);
             
             if (!match) {
-                throw new Error('Invalid format. Use: DD-MM.M H DDD-MM.M H (e.g., 48-12.22 N 052-28.24 W)');
+                throw new Error('Invalid format. Use: DD-MM.MM H DDD-MM.MM H (e.g., 51-30.44 N 000-07.67 W)');
             }
             
             // Parse latitude components
@@ -301,6 +301,8 @@
             // Validate ranges
             if (latDeg > 90 || latMin >= 60) throw new Error('Invalid latitude degrees or minutes');
             if (lonDeg > 180 || lonMin >= 60) throw new Error('Invalid longitude degrees or minutes');
+            if (latDeg === 90 && latMin > 0) throw new Error('Latitude 90° must have 00.00 minutes');
+            if (lonDeg === 180 && lonMin > 0) throw new Error('Longitude 180° must have 00.00 minutes');
             
             // Convert to decimal degrees
             let lat = latDeg + (latMin / 60);
@@ -878,16 +880,47 @@
             // Coordinate inputs
             ['coordA', 'coordB'].forEach(id => {
                 const input = document.getElementById(id);
+
+                input.addEventListener('keydown', (e) => {
+                    if (e.ctrlKey || e.metaKey || e.altKey) return;
+                    if (e.key.length !== 1) return;
+
+                    if (!/[0-9NSEWnsew.\-\s]/.test(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+
                 input.addEventListener('input', debounce(() => {
                     try {
+                        input.value = input.value
+                            .toUpperCase()
+                            .replace(/[^0-9NSEW.\-\s]/g, '')
+                            .replace(/\s+/g, ' ')
+                            .trimStart();
+
                         const parsed = parseMaritimeCoordinate(input.value);
+                        input.setCustomValidity('');
+                        input.classList.remove('border-rose-500');
+
                         const marker = id === 'coordA' ? 'A' : 'B';
                         mapController.updateMarkerPosition(marker, parsed.lat, parsed.lon);
                         mapController.updateRoutes();
                     } catch (e) {
-                        // Wait for valid input
+                        input.setCustomValidity('Use format: DD-MM.MM N DDD-MM.MM W');
+                        input.classList.add('border-rose-500');
                     }
                 }, 300));
+
+                input.addEventListener('blur', () => {
+                    try {
+                        const parsed = parseMaritimeCoordinate(input.value);
+                        input.value = toMaritimeFormat(parsed.lat, parsed.lon);
+                        input.setCustomValidity('');
+                        input.classList.remove('border-rose-500');
+                    } catch (e) {
+                        input.reportValidity();
+                    }
+                });
             });
             
             // Segment length controls
