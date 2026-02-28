@@ -599,9 +599,7 @@
                     zoom: 3,
                     zoomControl: false,
                     attributionControl: false,
-                    worldCopyJump: false,
-                    maxBounds: [[-85, -180], [85, 180]],
-                    maxBoundsViscosity: 1.0
+                    worldCopyJump: false
                 });
 
                 // Add zoom control to top-right
@@ -616,6 +614,9 @@
                     maxZoom: 19,
                     noWrap: true
                 }).addTo(this.map);
+
+                // Keep a single visible world while allowing continuous pan around longitudes
+                this.map.on('moveend', () => this.wrapMapCenterLongitude());
 
                 // Initialize markers
                 this.markers.A = L.marker([40.7128, -74.0060], {
@@ -634,6 +635,17 @@
                 
                 // Click on map to set coordinates
                 this.map.on('click', (e) => this.onMapClick(e));
+            }
+
+            wrapMapCenterLongitude() {
+                const center = this.map.getCenter();
+                const wrappedLng = normalizeLon(center.lng);
+
+                if (Math.abs(center.lng - wrappedLng) > 1e-8) {
+                    this.map.panTo([center.lat, wrappedLng], {
+                        animate: false
+                    });
+                }
             }
 
             createMarkerIcon(label, color) {
