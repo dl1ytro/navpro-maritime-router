@@ -869,11 +869,17 @@
 
             addPolylineSegments(points, style) {
                 const layerGroup = L.layerGroup();
-                const segments = splitPolylineAtDateLine(points);
+                const unwrappedPoints = unwrapPolylineLongitudes(points);
 
-                segments.forEach(segment => {
-                    L.polyline(segment, { ...style, noClip: true }).addTo(layerGroup);
-                });
+                if (unwrappedPoints.length > 1) {
+                    L.polyline(unwrappedPoints, { ...style, noClip: true }).addTo(layerGroup);
+                } else if (unwrappedPoints.length === 1) {
+                    L.circleMarker(unwrappedPoints[0], {
+                        color: style.color || '#38bdf8',
+                        radius: 2,
+                        opacity: style.opacity ?? 1
+                    }).addTo(layerGroup);
+                }
 
                 layerGroup.addTo(this.map);
                 return layerGroup;
@@ -911,6 +917,11 @@
                     const { lat: latB, lon: lonB } = coordB;
                     
                     this.currentPoints = { latA, lonA, latB, lonB };
+
+                    // Keep endpoint markers in the same world copy as the active route.
+                    const lonBDisplay = lonA + shortestDeltaLon(lonA, lonB);
+                    this.markers.A.setLatLng([latA, lonA]);
+                    this.markers.B.setLatLng([latB, lonBDisplay]);
                     
                     // Update parsed display
                     document.getElementById('parsedA').textContent = 
@@ -966,10 +977,9 @@
                     
                     // Fit bounds around the shortest longitudinal span so Pacific crossings
                     // don't get framed via the opposite world copy.
-                    const lonBForBounds = lonA + shortestDeltaLon(lonA, lonB);
                     const bounds = L.latLngBounds([
                         [latA, lonA],
-                        [latB, lonBForBounds]
+                        [latB, lonBDisplay]
                     ]);
                     this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
                     
