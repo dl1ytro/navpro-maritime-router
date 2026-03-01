@@ -54,7 +54,7 @@
         }
 
         :root {
-            --right-panel-width: 380px;
+            --right-panel-width: 440px;
         }
 
         .leaflet-top.leaflet-right {
@@ -102,16 +102,6 @@
             <main class="absolute inset-0 bg-slate-950">
                 <div id="map"></div>
 
-                <div id="debugOverlay" class="absolute top-6 left-6 glass-panel px-4 py-3 rounded-lg border border-slate-700/50 z-[1000] min-w-[210px]">
-                    <div class="text-xs text-slate-400 mb-1">Debug: Map Center</div>
-                    <div id="debugCenter" class="text-sm font-semibold text-cyan-300">Lon: -- | Lat: --</div>
-                </div>
-
-                <div class="absolute bottom-6 right-6 glass-panel px-4 py-3 rounded-lg border border-slate-700/50 z-[1000] max-w-xs">
-                    <div class="text-xs text-slate-400 mb-1">Navigation Mode</div>
-                    <div class="text-sm font-semibold text-slate-200">Great Circle Segmentation</div>
-                    <div class="text-xs text-slate-500 mt-1">Enter coordinates in maritime format: DD-MM.MM H DDD-MM.MM H</div>
-                </div>
             </main>
 
             <!-- Left Panel -->
@@ -212,7 +202,7 @@
             </aside>
 
             <!-- Right Panel -->
-            <aside class="fixed top-0 right-0 h-screen w-[380px] glass-panel border-l border-slate-700/50 flex overflow-hidden z-20">
+            <aside class="absolute top-0 right-0 bottom-0 w-[440px] glass-panel border-l border-slate-700/50 flex overflow-hidden z-20">
                 <div class="h-full flex flex-col overflow-y-auto min-h-0 p-4">
                 <!-- Distance Results -->
                 <div class="p-6 border-b border-slate-700/50">
@@ -816,9 +806,6 @@
                     noWrap: false
                 }).addTo(this.map);
 
-                // Debug center tracking: verify world wrap navigation beyond ±180 longitude
-                this.map.on('move', () => this.updateDebugCenter(false));
-                this.map.on('moveend', () => this.updateDebugCenter(true));
 
                 // Initialize markers
                 this.markers.A = L.marker([40.7128, -74.0060], {
@@ -838,17 +825,6 @@
                 // Click on map to set coordinates
                 this.map.on('click', (e) => this.onMapClick(e));
 
-                this.updateDebugCenter(true);
-            }
-
-            updateDebugCenter(shouldLog) {
-                const center = this.map.getCenter();
-                const centerText = `Lon: ${center.lng.toFixed(4)} | Lat: ${center.lat.toFixed(4)}`;
-                document.getElementById('debugCenter').textContent = centerText;
-
-                if (shouldLog) {
-                    console.log(`[Map Debug] ${centerText}`);
-                }
             }
 
             createMarkerIcon(label, color) {
@@ -1134,8 +1110,8 @@
 
                 row.innerHTML = `
                     <td class="px-3 py-2 font-mono text-amber-400 font-semibold">${wp.num}</td>
-                    <td class="px-3 py-2 font-mono text-slate-300">${latStr}</td>
-                    <td class="px-3 py-2 font-mono text-slate-300">${lonStr}</td>
+                    <td class="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">${latStr}</td>
+                    <td class="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">${lonStr}</td>
                     <td class="px-3 py-2 font-mono text-right ${wp.dist > 0 ? 'text-cyan-400' : 'text-slate-500'}">
                         ${wp.dist > 0 ? wp.dist.toFixed(1) : '--'}
                     </td>
