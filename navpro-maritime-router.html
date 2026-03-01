@@ -148,15 +148,15 @@
                     </h2>
                     
                     <div class="mb-4">
-                        <label class="block text-xs text-slate-400 mb-2">Segment Length (Nautical Miles)</label>
+                        <label class="block text-xs text-slate-400 mb-2">GC Segment Count</label>
                         <div class="flex items-center gap-3">
-                            <input type="range" id="segmentSlider" min="50" max="1000" step="50" value="250" class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
-                            <input type="number" id="segmentInput" value="250" min="1" class="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-center focus:outline-none focus:border-amber-400">
+                            <input type="range" id="segmentSlider" min="1" max="20" step="1" value="3" class="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-amber-400">
+                            <input type="number" id="segmentInput" value="3" min="1" class="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm text-center focus:outline-none focus:border-amber-400">
                         </div>
                         <div class="mt-2 text-xs text-slate-500 flex justify-between">
-                            <span>50 NM</span>
-                            <span id="segmentDisplay" class="text-amber-400 font-semibold">250 NM segments</span>
-                            <span>1000 NM</span>
+                            <span>1</span>
+                            <span id="segmentDisplay" class="text-amber-400 font-semibold">3 segments</span>
+                            <span>20</span>
                         </div>
                     </div>
 
@@ -526,11 +526,13 @@
                 return [lat, normalizeLon(lon)];
             }
 
-            // Generate waypoints at fixed distance intervals
-            static generateWaypoints(lat1, lon1, lat2, lon2, segmentLengthNM) {
+            // Generate waypoints by segment count, with each leg distance as Rhumb Line
+            static generateWaypointsByCount(lat1, lon1, lat2, lon2, segmentCount) {
                 ({ lat1, lon1, lat2, lon2 } = normalizeRouteEndpoints(lat1, lon1, lat2, lon2));
+                const waypoints = [];
+                const safeSegmentCount = Math.max(1, Math.round(segmentCount) || 1);
                 const totalDistance = this.distance(lat1, lon1, lat2, lon2);
-                
+
                 // Handle edge case where points are identical
                 if (totalDistance < 0.001) {
                     return [{
@@ -540,10 +542,7 @@
                         dist: 0
                     }];
                 }
-                
-                const numSegments = Math.max(1, Math.ceil(totalDistance / segmentLengthNM));
-                const waypoints = [];
-                
+
                 // Add starting point
                 waypoints.push({
                     num: 0,
@@ -551,36 +550,33 @@
                     lon: lon1,
                     dist: 0
                 });
-                
-                // Generate intermediate waypoints
-                for (let i = 1; i < numSegments; i++) {
-                    const f = i / numSegments;
+
+                // Generate intermediate waypoints equally spaced over the great-circle arc
+                for (let i = 1; i < safeSegmentCount; i++) {
+                    const f = i / safeSegmentCount;
                     const [lat, lon] = this.interpolate(lat1, lon1, lat2, lon2, f);
                     const prev = waypoints[waypoints.length - 1];
-                    const dist = this.distance(prev.lat, prev.lon, lat, lon);
-                    
+                    const dist = RhumbLine.distance(prev.lat, prev.lon, lat, lon);
+
                     waypoints.push({
                         num: i,
-                        lat: lat,
-                        lon: lon,
-                        dist: dist
+                        lat,
+                        lon,
+                        dist
                     });
                 }
-                
+
                 // Add destination
-                const lastDist = this.distance(
-                    waypoints[waypoints.length - 1].lat, 
-                    waypoints[waypoints.length - 1].lon, 
-                    lat2, lon2
-                );
-                
+                const prev = waypoints[waypoints.length - 1];
+                const lastDist = RhumbLine.distance(prev.lat, prev.lon, lat2, lon2);
+
                 waypoints.push({
-                    num: numSegments,
+                    num: safeSegmentCount,
                     lat: lat2,
                     lon: lon2,
                     dist: lastDist
                 });
-                
+
                 return waypoints;
             }
 
@@ -711,7 +707,7 @@
                 const [lat2, lon2] = b;
                 const gcPoints = GreatCircle.generateCurvePoints(lat1, lon1, lat2, lon2, 200);
                 const rhumbPoints = RhumbLine.generatePoints(lat1, lon1, lat2, lon2, 200);
-                const waypoints = GreatCircle.generateWaypoints(lat1, lon1, lat2, lon2, 250);
+                const waypoints = GreatCircle.generateWaypointsByCount(lat1, lon1, lat2, lon2, 3);
 
                 const gcSegments = splitPolylineAtDateLine(gcPoints);
                 const rhumbSegments = splitPolylineAtDateLine(rhumbPoints);
@@ -974,11 +970,11 @@
                     });
                     
                     // Generate and draw Great Circle segments
-                    const segmentLength = parseFloat(document.getElementById('segmentInput').value) || 250;
-                    const waypoints = GreatCircle.generateWaypoints(latA, lonA, latB, lonB, segmentLength);
+                    const segmentCount = parseInt(document.getElementById('segmentInput').value, 10) || 3;
+                    const waypoints = GreatCircle.generateWaypointsByCount(latA, lonA, latB, lonB, segmentCount);
                     const gcSegmentDistance = waypoints.reduce((total, waypoint) => total + waypoint.dist, 0);
 
-                    // Update segmented GC distance (changes with selected segment size)
+                    // Update segmented GC distance (sum of rhumb-line distances between GC waypoints)
                     document.getElementById('gcSegmentDistance').textContent = gcSegmentDistance.toFixed(1);
                     
                     // Update segment count
@@ -1182,23 +1178,23 @@
                 });
             });
             
-            // Segment length controls
+            // Segment count controls
             const slider = document.getElementById('segmentSlider');
             const input = document.getElementById('segmentInput');
             const display = document.getElementById('segmentDisplay');
             
             slider.addEventListener('input', (e) => {
                 input.value = e.target.value;
-                display.textContent = `${e.target.value} NM segments`;
+                display.textContent = `${e.target.value} segments`;
                 mapController.updateRoutes();
             });
             
             input.addEventListener('input', (e) => {
                 let val = parseInt(e.target.value);
                 if (isNaN(val) || val < 1) val = 1;
-                if (val > 10000) val = 10000;
-                slider.value = Math.min(val, 1000);
-                display.textContent = `${val} NM segments`;
+                if (val > 20) val = 20;
+                slider.value = val;
+                display.textContent = `${val} segments`;
                 mapController.updateRoutes();
             });
         }
