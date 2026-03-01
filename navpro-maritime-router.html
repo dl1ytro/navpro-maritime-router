@@ -197,6 +197,17 @@
                                 <div class="text-xs text-slate-500">nautical miles</div>
                             </div>
                         </div>
+
+                        <div class="flex justify-between items-center p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg">
+                            <div>
+                                <div class="text-xs text-cyan-400 font-semibold uppercase">GC Segmentation</div>
+                                <div class="text-xs text-slate-500">Total segment distances</div>
+                            </div>
+                            <div class="text-right">
+                                <div id="gcSegmentDistance" class="text-xl font-bold text-cyan-400">--</div>
+                                <div class="text-xs text-slate-500">nautical miles</div>
+                            </div>
+                        </div>
                         
                         <div class="flex justify-between items-center p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
                             <div>
@@ -965,6 +976,10 @@
                     // Generate and draw Great Circle segments
                     const segmentLength = parseFloat(document.getElementById('segmentInput').value) || 250;
                     const waypoints = GreatCircle.generateWaypoints(latA, lonA, latB, lonB, segmentLength);
+                    const gcSegmentDistance = waypoints.reduce((total, waypoint) => total + waypoint.dist, 0);
+
+                    // Update segmented GC distance (changes with selected segment size)
+                    document.getElementById('gcSegmentDistance').textContent = gcSegmentDistance.toFixed(1);
                     
                     // Update segment count
                     document.getElementById('totalSegments').textContent = waypoints.length - 1;
