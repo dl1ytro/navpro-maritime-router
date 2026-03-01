@@ -52,6 +52,15 @@
             background: transparent !important;
             border: none !important;
         }
+
+        :root {
+            --right-panel-width: 380px;
+        }
+
+        .leaflet-top.leaflet-right {
+            right: calc(var(--right-panel-width) + 1rem);
+            z-index: 1200;
+        }
     </style>
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans antialiased overflow-hidden">
@@ -203,8 +212,8 @@
             </aside>
 
             <!-- Right Panel -->
-            <aside class="absolute right-6 top-6 bottom-6 w-[380px] glass-panel border border-slate-700/50 rounded-xl flex overflow-hidden z-10">
-                <div class="h-full flex flex-col overflow-y-auto min-h-0">
+            <aside class="fixed top-0 right-0 h-screen w-[380px] glass-panel border-l border-slate-700/50 flex overflow-hidden z-20">
+                <div class="h-full flex flex-col overflow-y-auto min-h-0 p-4">
                 <!-- Distance Results -->
                 <div class="p-6 border-b border-slate-700/50">
                     <h2 class="text-sm font-semibold text-cyan-400 uppercase tracking-wider mb-4 flex items-center gap-2">
