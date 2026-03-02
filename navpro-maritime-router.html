@@ -1075,6 +1075,26 @@
 
             drawSegments(waypoints) {
                 const renderWaypoints = unwrapWaypointLongitudes(waypoints);
+                const worldShifts = [-360, 0, 360];
+
+                const addWaypointMarkers = (wp, iconNumber, popupTitle) => {
+                    worldShifts.forEach((shift) => {
+                        const marker = L.marker([wp.lat, wp.renderLon + shift], {
+                            icon: this.createWaypointIcon(iconNumber)
+                        }).addTo(this.map);
+
+                        marker.bindPopup(`
+                            <div style="color: #1e293b;">
+                                <strong>${popupTitle}</strong><br>
+                                Lat: ${formatLatitude(wp.lat)}<br>
+                                Lon: ${formatLongitude(wp.lon)}<br>
+                                Dist from prev: ${wp.dist.toFixed(1)} NM
+                            </div>
+                        `);
+
+                        this.layers.waypointMarkers.push(marker);
+                    });
+                };
 
                 // Draw straight line segments between waypoints
                 for (let i = 0; i < renderWaypoints.length - 1; i++) {
@@ -1095,40 +1115,14 @@
 
                     // Add waypoint marker (except for start and end)
                     if (i > 0) {
-                        const marker = L.marker([wp1.lat, wp1.renderLon], {
-                            icon: this.createWaypointIcon(i)
-                        }).addTo(this.map);
-
-                        marker.bindPopup(`
-                            <div style="color: #1e293b;">
-                                <strong>Waypoint ${i}</strong><br>
-                                Lat: ${formatLatitude(wp1.lat)}<br>
-                                Lon: ${formatLongitude(wp1.lon)}<br>
-                                Dist from prev: ${wp1.dist.toFixed(1)} NM
-                            </div>
-                        `);
-
-                        this.layers.waypointMarkers.push(marker);
+                        addWaypointMarkers(wp1, i, `Waypoint ${i}`);
                     }
                 }
 
                 // Add destination marker if there are intermediate waypoints
                 if (renderWaypoints.length > 2) {
                     const lastWp = renderWaypoints[renderWaypoints.length - 1];
-                    const marker = L.marker([lastWp.lat, lastWp.renderLon], {
-                        icon: this.createWaypointIcon(renderWaypoints.length - 1)
-                    }).addTo(this.map);
-
-                    marker.bindPopup(`
-                        <div style="color: #1e293b;">
-                            <strong>Destination</strong><br>
-                            Lat: ${formatLatitude(lastWp.lat)}<br>
-                            Lon: ${formatLongitude(lastWp.lon)}<br>
-                            Dist from prev: ${lastWp.dist.toFixed(1)} NM
-                        </div>
-                    `);
-
-                    this.layers.waypointMarkers.push(marker);
+                    addWaypointMarkers(lastWp, renderWaypoints.length - 1, 'Destination');
                 }
             }
 
