@@ -929,12 +929,33 @@
 
             addPolylineSegments(points, style) {
                 const layerGroup = L.layerGroup();
-                const unwrappedPoints = unwrapPolylineLongitudes(points);
+                const segments = splitPolylineAtDateLine(points);
 
-                if (unwrappedPoints.length > 1) {
-                    L.polyline(unwrappedPoints, { ...style, noClip: true }).addTo(layerGroup);
-                } else if (unwrappedPoints.length === 1) {
-                    L.circleMarker(unwrappedPoints[0], {
+                if (segments.length) {
+                    // Render route in adjacent world copies to make anti-meridian
+                    // crossings appear continuous at both map edges.
+                    const worldShifts = [-360, 0, 360];
+
+                    segments.forEach((segment) => {
+                        if (segment.length > 1) {
+                            worldShifts.forEach((shift) => {
+                                const shiftedSegment = segment.map(([lat, lon]) => [lat, lon + shift]);
+                                L.polyline(shiftedSegment, { ...style, noClip: true }).addTo(layerGroup);
+                            });
+                            return;
+                        }
+
+                        const [[lat, lon]] = segment;
+                        worldShifts.forEach((shift) => {
+                            L.circleMarker([lat, lon + shift], {
+                                color: style.color || '#38bdf8',
+                                radius: 2,
+                                opacity: style.opacity ?? 1
+                            }).addTo(layerGroup);
+                        });
+                    });
+                } else if (points.length === 1) {
+                    L.circleMarker([points[0][0], normalizeLon(points[0][1])], {
                         color: style.color || '#38bdf8',
                         radius: 2,
                         opacity: style.opacity ?? 1
