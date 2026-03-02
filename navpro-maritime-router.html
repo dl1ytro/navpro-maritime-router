@@ -785,14 +785,39 @@
             }
 
             init() {
+                const worldBounds = L.latLngBounds(
+                    [-85.0511, -180],
+                    [85.0511, 180]
+                );
+
                 // Initialize map centered on Atlantic
                 this.map = L.map('map', {
                     center: [45, -30],
                     zoom: 3,
                     zoomControl: false,
                     attributionControl: false,
-                    worldCopyJump: false
+                    worldCopyJump: false,
+                    maxBounds: worldBounds,
+                    maxBoundsViscosity: 1.0,
+                    zoomSnap: 0,
+                    zoomDelta: 0.25
                 });
+
+                const enforceSingleWorldViewport = () => {
+                    // Fit exactly one world at minimum zoom without allowing overflow.
+                    const minWorldZoom = this.map.getBoundsZoom(worldBounds, true);
+                    this.map.setMinZoom(minWorldZoom);
+
+                    if (this.map.getZoom() < minWorldZoom) {
+                        this.map.setZoom(minWorldZoom, { animate: false });
+                    }
+
+                    this.map.panInsideBounds(worldBounds, { animate: false });
+                };
+
+                enforceSingleWorldViewport();
+                this.map.on('resize', enforceSingleWorldViewport);
+                this.map.on('drag', () => this.map.panInsideBounds(worldBounds, { animate: false }));
 
                 // Add zoom control to top-right
                 L.control.zoom({
@@ -804,7 +829,8 @@
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
                     subdomains: 'abcd',
                     maxZoom: 19,
-                    noWrap: false
+                    noWrap: true,
+                    bounds: worldBounds
                 }).addTo(this.map);
 
 
