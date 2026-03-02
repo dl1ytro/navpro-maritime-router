@@ -1006,13 +1006,7 @@
                     // Update waypoint table
                     updateWaypointTable(waypoints);
 
-                    // Fit bounds around the shortest longitudinal span so Pacific crossings
-                    // don't get framed via the opposite world copy.
-                    const bounds = L.latLngBounds([
-                        [latA, lonA],
-                        [latB, lonBDisplay]
-                    ]);
-                    this.map.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+                    // Keep current map view stable while route layers/markers are refreshed.
 
                 } catch (error) {
                     console.error('Error updating routes:', error);
