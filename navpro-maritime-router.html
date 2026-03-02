@@ -769,6 +769,11 @@
             constructor() {
                 this.map = null;
                 this.markers = {};
+                this.endpointMarkerShifts = [-360, 0, 360];
+                this.endpointMirrorMarkers = {
+                    A: [],
+                    B: []
+                };
                 this.layers = {
                     gcCurve: null,
                     rhumbLine: null,
@@ -856,6 +861,8 @@
                     icon: this.createMarkerIcon('B', 'emerald')
                 }).addTo(this.map);
 
+                this.createEndpointMirrorMarkers();
+
                 // Bind events
                 this.markers.A.on('dragend', (e) => this.onMarkerDrag('A', e));
                 this.markers.B.on('dragend', (e) => this.onMarkerDrag('B', e));
@@ -863,6 +870,39 @@
                 // Click on map to set coordinates
                 this.map.on('click', (e) => this.onMapClick(e));
 
+            }
+
+            createEndpointMirrorMarkers() {
+                const mirroredShifts = this.endpointMarkerShifts.filter((shift) => shift !== 0);
+                const endpointDefinitions = [
+                    { key: 'A', lat: 40.7128, lon: -74.0060, color: 'rose' },
+                    { key: 'B', lat: 51.5074, lon: -0.1278, color: 'emerald' }
+                ];
+
+                endpointDefinitions.forEach(({ key, lat, lon, color }) => {
+                    this.endpointMirrorMarkers[key] = mirroredShifts.map((shift) => L.marker([lat, lon + shift], {
+                        interactive: false,
+                        keyboard: false,
+                        icon: this.createMarkerIcon(key, color)
+                    }).addTo(this.map));
+                });
+
+                this.syncEndpointMarkers(40.7128, -74.0060, 51.5074, -0.1278);
+            }
+
+            syncEndpointMarkers(latA, lonADisplay, latB, lonBDisplay) {
+                this.markers.A.setLatLng([latA, lonADisplay]);
+                this.markers.B.setLatLng([latB, lonBDisplay]);
+
+                const mirroredShifts = this.endpointMarkerShifts.filter((shift) => shift !== 0);
+
+                this.endpointMirrorMarkers.A.forEach((marker, index) => {
+                    marker.setLatLng([latA, lonADisplay + mirroredShifts[index]]);
+                });
+
+                this.endpointMirrorMarkers.B.forEach((marker, index) => {
+                    marker.setLatLng([latB, lonBDisplay + mirroredShifts[index]]);
+                });
             }
 
             createMarkerIcon(label, color) {
@@ -1001,8 +1041,7 @@
 
                     // Keep endpoint markers in the same world copy as the active route.
                     const lonBDisplay = lonA + shortestDeltaLon(lonA, lonB);
-                    this.markers.A.setLatLng([latA, lonA]);
-                    this.markers.B.setLatLng([latB, lonBDisplay]);
+                    this.syncEndpointMarkers(latA, lonA, latB, lonBDisplay);
 
                     // Update parsed display
                     document.getElementById('parsedA').textContent =
@@ -1127,7 +1166,18 @@
             }
 
             updateMarkerPosition(marker, lat, lon) {
-                this.markers[marker].setLatLng([lat, normalizeLon(lon)]);
+                const normalizedLon = normalizeLon(lon);
+
+                if (marker === 'A') {
+                    const lonB = parseMaritimeCoordinate(document.getElementById('coordB').value).lon;
+                    const lonBDisplay = normalizedLon + shortestDeltaLon(normalizedLon, lonB);
+                    this.syncEndpointMarkers(lat, normalizedLon, this.markers.B.getLatLng().lat, lonBDisplay);
+                    return;
+                }
+
+                const lonA = parseMaritimeCoordinate(document.getElementById('coordA').value).lon;
+                const lonBDisplay = lonA + shortestDeltaLon(lonA, normalizedLon);
+                this.syncEndpointMarkers(this.markers.A.getLatLng().lat, lonA, lat, lonBDisplay);
             }
         }
 
