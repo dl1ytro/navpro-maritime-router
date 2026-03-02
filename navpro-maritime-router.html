@@ -53,12 +53,7 @@
             border: none !important;
         }
 
-        :root {
-            --right-panel-width: 440px;
-        }
-
         .leaflet-top.leaflet-right {
-            right: calc(var(--right-panel-width) + 1rem);
             z-index: 1200;
         }
     </style>
@@ -96,16 +91,16 @@
             </div>
         </header>
 
-        <div class="flex-1 overflow-hidden relative">
+        <div class="flex-1 overflow-hidden flex">
 
             <!-- Map Area -->
-            <main class="absolute inset-0 bg-slate-950">
+            <main class="flex-1 min-w-0 bg-slate-950 order-2">
                 <div id="map"></div>
 
             </main>
 
             <!-- Left Panel -->
-            <aside class="absolute left-0 top-0 bottom-0 w-[380px] glass-panel border-r border-slate-700/50 flex overflow-hidden z-10">
+            <aside class="w-[380px] shrink-0 glass-panel border-r border-slate-700/50 flex overflow-hidden z-10 order-1">
                 <div class="h-full flex flex-col overflow-y-auto min-h-0">
                 <!-- Coordinate Input -->
                 <div class="p-6 border-b border-slate-700/50">
@@ -202,7 +197,7 @@
             </aside>
 
             <!-- Right Panel -->
-            <aside class="absolute top-0 right-0 bottom-0 w-[440px] glass-panel border-l border-slate-700/50 flex overflow-hidden z-20">
+            <aside class="w-[440px] shrink-0 glass-panel border-l border-slate-700/50 flex overflow-hidden z-20 order-3">
                 <div class="h-full flex flex-col overflow-y-auto min-h-0 p-4">
                 <!-- Distance Results -->
                 <div class="p-6 border-b border-slate-700/50">
@@ -785,6 +780,7 @@
             }
 
             init() {
+                const mapElement = document.getElementById('map');
                 const worldBounds = L.latLngBounds(
                     [-85.0511, -180],
                     [85.0511, 180]
@@ -818,6 +814,21 @@
                 enforceSingleWorldViewport();
                 this.map.on('resize', enforceSingleWorldViewport);
                 this.map.on('drag', () => this.map.panInsideBounds(worldBounds, { animate: false }));
+
+                const invalidateMapSize = () => {
+                    requestAnimationFrame(() => {
+                        this.map.invalidateSize();
+                    });
+                };
+
+                window.addEventListener('resize', invalidateMapSize);
+
+                if (window.ResizeObserver && mapElement) {
+                    this.mapResizeObserver = new ResizeObserver(() => invalidateMapSize());
+                    this.mapResizeObserver.observe(mapElement);
+                }
+
+                setTimeout(invalidateMapSize, 0);
 
                 // Add zoom control to top-right
                 L.control.zoom({
