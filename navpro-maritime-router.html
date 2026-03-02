@@ -880,11 +880,15 @@
                 ];
 
                 endpointDefinitions.forEach(({ key, lat, lon, color }) => {
-                    this.endpointMirrorMarkers[key] = mirroredShifts.map((shift) => L.marker([lat, lon + shift], {
-                        interactive: false,
-                        keyboard: false,
-                        icon: this.createMarkerIcon(key, color)
-                    }).addTo(this.map));
+                    this.endpointMirrorMarkers[key] = mirroredShifts.map((shift) => {
+                        const marker = L.marker([lat, lon + shift], {
+                            draggable: true,
+                            icon: this.createMarkerIcon(key, color)
+                        }).addTo(this.map);
+
+                        marker.on('dragend', (e) => this.onMirrorMarkerDrag(key, shift, e));
+                        return marker;
+                    });
                 });
 
                 this.syncEndpointMarkers(40.7128, -74.0060, 51.5074, -0.1278);
@@ -942,9 +946,17 @@
 
             onMarkerDrag(marker, event) {
                 const pos = event.target.getLatLng();
-                const normalizedLon = normalizeLon(pos.lng);
-                event.target.setLatLng([pos.lat, normalizedLon]);
-                const coordStr = toMaritimeFormat(pos.lat, normalizedLon);
+                this.applyDraggedMarkerPosition(marker, pos.lat, pos.lng);
+            }
+
+            onMirrorMarkerDrag(marker, shift, event) {
+                const pos = event.target.getLatLng();
+                this.applyDraggedMarkerPosition(marker, pos.lat, pos.lng - shift);
+            }
+
+            applyDraggedMarkerPosition(marker, lat, lng) {
+                const normalizedLon = normalizeLon(lng);
+                const coordStr = toMaritimeFormat(lat, normalizedLon);
                 document.getElementById(`coord${marker}`).value = coordStr;
                 this.updateRoutes();
             }
