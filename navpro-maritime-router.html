@@ -275,8 +275,8 @@
                                     <th class="px-3 py-2 text-left font-semibold">WP#</th>
                                     <th class="px-3 py-2 text-left font-semibold">Latitude</th>
                                     <th class="px-3 py-2 text-left font-semibold">Longitude</th>
-                                    <th class="px-3 py-2 text-right font-semibold">Dist (NM)</th>
                                     <th class="px-3 py-2 text-right font-semibold">HdG (°)</th>
+                                    <th class="px-3 py-2 text-right font-semibold">Dist (NM)</th>
                                 </tr>
                             </thead>
                             <tbody id="waypointTableBody" class="divide-y divide-slate-700/30">
@@ -1116,11 +1116,11 @@
                     <td class="px-3 py-2 font-mono text-amber-400 font-semibold">${wp.num}</td>
                     <td class="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">${latStr}</td>
                     <td class="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">${lonStr}</td>
-                    <td class="px-3 py-2 font-mono text-right ${wp.dist > 0 ? 'text-cyan-400' : 'text-slate-500'}">
-                        ${wp.dist > 0 ? wp.dist.toFixed(1) : '--'}
-                    </td>
                     <td class="px-3 py-2 font-mono text-right ${heading !== null ? 'text-cyan-400' : 'text-slate-500'}">
                         ${heading !== null ? `${heading.toFixed(1)}°` : '--'}
+                    </td>
+                    <td class="px-3 py-2 font-mono text-right ${wp.dist > 0 ? 'text-cyan-400' : 'text-slate-500'}">
+                        ${wp.dist > 0 ? wp.dist.toFixed(1) : '--'}
                     </td>
                 `;
 
