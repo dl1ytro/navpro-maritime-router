@@ -276,6 +276,7 @@
                                     <th class="px-3 py-2 text-left font-semibold">Latitude</th>
                                     <th class="px-3 py-2 text-left font-semibold">Longitude</th>
                                     <th class="px-3 py-2 text-right font-semibold">Dist (NM)</th>
+                                    <th class="px-3 py-2 text-right font-semibold">HdG (°)</th>
                                 </tr>
                             </thead>
                             <tbody id="waypointTableBody" class="divide-y divide-slate-700/30">
@@ -1096,7 +1097,7 @@
 
             if (!waypoints || waypoints.length === 0) {
                 const row = document.createElement('tr');
-                row.innerHTML = '<td colspan="4" class="px-3 py-4 text-center text-slate-500">No waypoints to display</td>';
+                row.innerHTML = '<td colspan="5" class="px-3 py-4 text-center text-slate-500">No waypoints to display</td>';
                 tbody.appendChild(row);
                 return;
             }
@@ -1108,12 +1109,18 @@
                 const latStr = formatLatitude(wp.lat);
                 const lonStr = formatLongitude(wp.lon);
 
+                const nextWp = waypoints[index + 1];
+                const heading = nextWp ? RhumbLine.course(wp.lat, wp.lon, nextWp.lat, nextWp.lon) : null;
+
                 row.innerHTML = `
                     <td class="px-3 py-2 font-mono text-amber-400 font-semibold">${wp.num}</td>
                     <td class="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">${latStr}</td>
                     <td class="px-3 py-2 font-mono text-slate-300 whitespace-nowrap">${lonStr}</td>
                     <td class="px-3 py-2 font-mono text-right ${wp.dist > 0 ? 'text-cyan-400' : 'text-slate-500'}">
                         ${wp.dist > 0 ? wp.dist.toFixed(1) : '--'}
+                    </td>
+                    <td class="px-3 py-2 font-mono text-right ${heading !== null ? 'text-cyan-400' : 'text-slate-500'}">
+                        ${heading !== null ? `${heading.toFixed(1)}°` : '--'}
                     </td>
                 `;
 
