@@ -64,30 +64,28 @@
 
         <!-- Header -->
         <header class="glass-panel border-b border-slate-700/50 px-6 py-4 flex items-center justify-between shrink-0 z-20">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-cyan-500/20">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 7m0 13V7m0 0L9.553 4.553A1 1 0 009 4.118v.006"></path>
-                    </svg>
-                </div>
+            <div>
                 <div>
                     <h1 class="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">NAVPRO Maritime Route Planner</h1>
                     <p class="text-xs text-slate-400">Great Circle & Rhumb Line Navigation System</p>
                 </div>
             </div>
             <div class="flex items-center gap-4 text-sm">
-                <div class="flex items-center gap-2">
+                <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
+                    <input type="checkbox" id="toggleGreatCircle" class="accent-rose-500" checked>
                     <span class="w-3 h-3 rounded-full bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></span>
-                    <span class="text-slate-300">Great Circle</span>
-                </div>
-                <div class="flex items-center gap-2">
+                    <span>Great Circle</span>
+                </label>
+                <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
+                    <input type="checkbox" id="toggleRhumbLine" class="accent-emerald-400" checked>
                     <span class="w-3 h-3 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.5)]"></span>
-                    <span class="text-slate-300">Rhumb Line</span>
-                </div>
-                <div class="flex items-center gap-2">
+                    <span>Rhumb Line</span>
+                </label>
+                <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
+                    <input type="checkbox" id="toggleGCSegments" class="accent-amber-400" checked>
                     <span class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_10px_rgba(251,191,36,0.5)]"></span>
-                    <span class="text-slate-300">GC Segments</span>
-                </div>
+                    <span>GC Segments</span>
+                </label>
             </div>
         </header>
 
@@ -780,8 +778,45 @@
                     gcSegments: [],
                     waypointMarkers: []
                 };
+                this.layerVisibility = {
+                    gcCurve: true,
+                    rhumbLine: true,
+                    gcSegments: true
+                };
                 this.currentPoints = null;
                 this.init();
+            }
+
+            updateLayerVisibility(layerKey, isVisible) {
+                this.layerVisibility[layerKey] = isVisible;
+
+                if (layerKey === 'gcSegments') {
+                    this.layers.gcSegments.forEach((line) => {
+                        if (isVisible) {
+                            line.addTo(this.map);
+                        } else {
+                            this.map.removeLayer(line);
+                        }
+                    });
+
+                    this.layers.waypointMarkers.forEach((marker) => {
+                        if (isVisible) {
+                            marker.addTo(this.map);
+                        } else {
+                            this.map.removeLayer(marker);
+                        }
+                    });
+                    return;
+                }
+
+                const layer = this.layers[layerKey];
+                if (!layer) return;
+
+                if (isVisible) {
+                    layer.addTo(this.map);
+                } else {
+                    this.map.removeLayer(layer);
+                }
             }
 
             init() {
@@ -1085,6 +1120,7 @@
                         opacity: 0.8,
                         dashArray: '10, 10'
                     });
+                    this.updateLayerVisibility('gcCurve', this.layerVisibility.gcCurve);
 
                     // Draw Rhumb Line
                     const rhumbPoints = RhumbLine.generatePoints(latA, lonA, latB, lonB, 100);
@@ -1093,6 +1129,7 @@
                         weight: 3,
                         opacity: 0.8
                     });
+                    this.updateLayerVisibility('rhumbLine', this.layerVisibility.rhumbLine);
 
                     // Generate and draw Great Circle segments
                     const segmentationMode = document.querySelector('input[name="segmentationMode"]:checked')?.value || 'count';
@@ -1111,6 +1148,7 @@
 
                     // Draw segments and waypoints
                     this.drawSegments(waypoints);
+                    this.updateLayerVisibility('gcSegments', this.layerVisibility.gcSegments);
 
                     // Update waypoint table
                     updateWaypointTable(waypoints);
@@ -1266,6 +1304,19 @@
         });
 
         function setupInputListeners() {
+            const toggleBindings = [
+                { id: 'toggleGreatCircle', key: 'gcCurve' },
+                { id: 'toggleRhumbLine', key: 'rhumbLine' },
+                { id: 'toggleGCSegments', key: 'gcSegments' }
+            ];
+
+            toggleBindings.forEach(({ id, key }) => {
+                const checkbox = document.getElementById(id);
+                checkbox.addEventListener('change', (e) => {
+                    mapController.updateLayerVisibility(key, e.target.checked);
+                });
+            });
+
             // Coordinate inputs
             ['coordA', 'coordB'].forEach(id => {
                 const input = document.getElementById(id);
