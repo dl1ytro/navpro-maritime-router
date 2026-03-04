@@ -146,5 +146,4 @@ When exporting waypoint data:
 
 ## License
 
-No explicit license is currently defined in this repository.
-If you plan to distribute or open-source this project, add a `LICENSE` file (e.g., MIT, Apache-2.0).
+License: NAVPRO Non-Commercial License
